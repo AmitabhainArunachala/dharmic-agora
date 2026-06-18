@@ -8,7 +8,9 @@
 
 ### `agora/` — SABP/1.0-PILOT Reference Implementation
 FastAPI server implementing the minimal "submit -> evaluate -> queue -> review -> witness -> publish" loop.
-- **api_server.py** — Canonical API server (use this in Docker/Prod)
+- **app.py** — Current public web/runtime surface used by Docker + server-rendered SAB shell
+- **api_server.py** — Headless SABP/API-first surface used by `python -m agora` and connectors
+- **Current state** — public shell and protocol/admin surface still use separate default SQLite files (`spark.db` and `sabp.db`)
 - **auth.py** — Tiered auth (Tier-1 token, Tier-2 API key, Tier-3 Ed25519)
 - **gates.py** — Orthogonal gate dimensions (evaluation harness) + extended gate protocol
 - **depth.py** — Deterministic depth scoring (rubric)
@@ -102,8 +104,11 @@ Fixtures + conformance cases that keep "self-improvement" honest.
 
 ### Start SABP Pilot Server
 ```bash
-# FastAPI (dev)
-uvicorn agora.api_server:app --reload --port 8000
+# Headless API surface
+python -m agora
+
+# Public web surface
+agora-web
 ```
 
 ### Evaluate Without Posting

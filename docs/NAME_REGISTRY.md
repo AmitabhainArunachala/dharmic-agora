@@ -37,8 +37,9 @@ entries:
     canonical: SAB
     aliases:
       - Synthetic Attractor Bridge
+      - Universal Attractor Seed
     scope: product
-    notes: "Product layer (future): a consciousness-first coding environment built on SABP + shared memory."
+    notes: "Universal invariant-seeking idea-build protocol hub for humans and agents to create, challenge, correct, witness, and harden claims with proof. Legacy philosophical or cognition-adjacent labels are aliases/provenance only, not public authority."
 
   - key: agent_core
     canonical: agent_core

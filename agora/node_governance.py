@@ -35,6 +35,27 @@ VALID_STAGES: Set[str] = {
     STAGE_VENTURE_EXTERNAL,
 }
 
+WITNESS_MANDALA_REQUIRED_ROLES = (
+    "formal",
+    "engineering",
+    "adversarial",
+    "economic",
+    "ecological_social",
+    "human_telos",
+)
+
+WITNESS_MANDALA_REQUIRED_FIELDS = (
+    "role",
+    "stance",
+    "strongest_affirmation",
+    "strongest_objection",
+    "what_would_make_this_false",
+    "evidence_required_to_upgrade",
+    "protected_value",
+    "next_test",
+    "confidence",
+)
+
 
 @dataclass
 class StageEvaluation:
@@ -80,6 +101,50 @@ def _count_list(packet: Mapping[str, Any], key: str) -> int:
     if not isinstance(value, list):
         return 0
     return len(value)
+
+
+def _is_nonempty_text(value: Any) -> bool:
+    return isinstance(value, str) and bool(value.strip())
+
+
+def _is_nonempty_list(value: Any) -> bool:
+    return isinstance(value, list) and any(str(item).strip() for item in value)
+
+
+def _witness_mandala_records(claim: Mapping[str, Any]) -> List[Mapping[str, Any]]:
+    mandala = claim.get("witness_mandala")
+    if not isinstance(mandala, Mapping):
+        return []
+    records = mandala.get("records", [])
+    if not isinstance(records, list):
+        return []
+    return [record for record in records if isinstance(record, Mapping)]
+
+
+def _is_witness_mandala_record_complete(record: Mapping[str, Any]) -> bool:
+    for field in WITNESS_MANDALA_REQUIRED_FIELDS:
+        value = record.get(field)
+        if field == "evidence_required_to_upgrade":
+            if not _is_nonempty_list(value):
+                return False
+        elif field == "confidence":
+            try:
+                confidence = float(value)
+            except (TypeError, ValueError):
+                return False
+            if confidence < 0.0 or confidence > 1.0:
+                return False
+        elif not _is_nonempty_text(value):
+            return False
+    return True
+
+
+def _witness_mandala_roles(records: List[Mapping[str, Any]]) -> Set[str]:
+    return {
+        str(record.get("role", "")).strip()
+        for record in records
+        if str(record.get("role", "")).strip()
+    }
 
 
 def _count_explicit_non_adjacent_witnesses(
@@ -141,6 +206,13 @@ def _has_cooldown_elapsed(
 def _common_metrics(claim: Mapping[str, Any], pairs_map: Mapping[str, Set[str]]) -> Dict[str, Any]:
     explicit_non_adj = _count_explicit_non_adjacent_witnesses(claim, pairs_map)
     declared_non_adj = _to_int(claim.get("non_adjacent_witness_count", 0))
+    mandala_records = _witness_mandala_records(claim)
+    mandala_roles = _witness_mandala_roles(mandala_records)
+    complete_mandala_roles = {
+        str(record.get("role", "")).strip()
+        for record in mandala_records
+        if _is_witness_mandala_record_complete(record)
+    }
     return {
         "claim_id": str(claim.get("claim_id", "")),
         "node_id": str(claim.get("node_id", "")),
@@ -158,6 +230,14 @@ def _common_metrics(claim: Mapping[str, Any], pairs_map: Mapping[str, Set[str]])
         "public_good_impact_assessment_count": _count_list(claim, "public_good_impact_refs"),
         "externalization_ready": bool(claim.get("externalization_ready", False)),
         "quarantine_complete": bool(claim.get("quarantine_complete", False)),
+        "witness_mandala_required": bool(claim.get("witness_mandala_required", False)),
+        "witness_mandala_record_count": len(mandala_records),
+        "witness_mandala_role_count": len(mandala_roles),
+        "witness_mandala_complete_role_count": len(complete_mandala_roles),
+        "witness_mandala_roles": sorted(mandala_roles),
+        "witness_mandala_complete": all(
+            role in complete_mandala_roles for role in WITNESS_MANDALA_REQUIRED_ROLES
+        ),
     }
 
 
@@ -215,6 +295,63 @@ def _validate_node_coordinate_integrity(
                     f"cross_node_refs node_id {witness_node_id} has invalid node_coordinate: {exc}"
                 )
     metrics["cross_node_coordinate_explicit_count"] = explicit_cross_coords
+
+
+def _validate_witness_mandala(
+    claim: Mapping[str, Any],
+    metrics: Dict[str, Any],
+    errors: List[str],
+) -> None:
+    mandala = claim.get("witness_mandala")
+    required = bool(metrics.get("witness_mandala_required", False))
+    if mandala is None and not required:
+        return
+    if not isinstance(mandala, Mapping):
+        errors.append("witness mandala is required but missing or not an object")
+        return
+
+    records = _witness_mandala_records(claim)
+    role_map: Dict[str, Mapping[str, Any]] = {}
+    for record in records:
+        role = str(record.get("role", "")).strip()
+        if not role:
+            errors.append("witness mandala record missing role")
+            continue
+        if role in role_map:
+            errors.append(f"duplicate witness mandala role: {role}")
+            continue
+        role_map[role] = record
+
+    missing_roles = [
+        role for role in WITNESS_MANDALA_REQUIRED_ROLES if role not in role_map
+    ]
+    if missing_roles:
+        errors.append(
+            "witness mandala missing required roles: " + ", ".join(missing_roles)
+        )
+
+    for role, record in role_map.items():
+        missing_fields: List[str] = []
+        for field in WITNESS_MANDALA_REQUIRED_FIELDS:
+            value = record.get(field)
+            if field == "evidence_required_to_upgrade":
+                if not _is_nonempty_list(value):
+                    missing_fields.append(field)
+            elif field == "confidence":
+                try:
+                    confidence = float(value)
+                except (TypeError, ValueError):
+                    missing_fields.append(field)
+                    continue
+                if confidence < 0.0 or confidence > 1.0:
+                    missing_fields.append(field)
+            elif not _is_nonempty_text(value):
+                missing_fields.append(field)
+        if missing_fields:
+            errors.append(
+                f"witness mandala role {role} missing required fields: "
+                + ", ".join(missing_fields)
+            )
 
 
 def _check_paper_internal(
@@ -293,6 +430,11 @@ def _check_venture_proposal(
         errors.append("insufficient red-team memos for venture proposal")
     if _to_int(metrics.get("human_review_count")) < _to_int(t.get("human_review_min", 0)):
         errors.append("missing required human review for venture proposal")
+    if bool(t.get("witness_mandala_required", False)) or bool(
+        metrics.get("witness_mandala_required", False)
+    ):
+        if not bool(metrics.get("witness_mandala_complete", False)):
+            errors.append("witness mandala incomplete for venture proposal")
 
 
 def _check_venture_external_release(
@@ -359,6 +501,7 @@ def evaluate_claim_for_stage(
     metrics = _common_metrics(claim, loaded_non_adjacent)
     _validate_non_adjacent_integrity(metrics, errors)
     _validate_node_coordinate_integrity(claim, metrics, errors)
+    _validate_witness_mandala(claim, metrics, errors)
 
     if stage == STAGE_PAPER_INTERNAL:
         _check_paper_internal(claim, loaded_thresholds, metrics, errors)

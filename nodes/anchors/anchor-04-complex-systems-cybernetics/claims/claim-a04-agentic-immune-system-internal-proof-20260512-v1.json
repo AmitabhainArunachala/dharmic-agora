@@ -1,0 +1,186 @@
+{
+  "artifact_refs": [
+    "/Users/dhyana/dharma_swarm/reports/agentic_immune_system_packet_20260511/proof_artifact_contract.json",
+    "/Users/dhyana/dharma_swarm/reports/agentic_immune_system_packet_20260511/reviews/telos_artifact_review.json"
+  ],
+  "capture_risk_assessment_refs": [],
+  "citation_pack_refs": [],
+  "claim_id": "claim-a04-agentic-immune-system-internal-proof-20260512-v1",
+  "cooldown_until": "2026-05-11T14:17:20.427819+00:00",
+  "created_at": "2026-05-12T14:17:20.427819+00:00",
+  "cross_model_affirm_count": 2,
+  "cross_node_refs": [
+    {
+      "node_coordinate": "Node_01",
+      "node_id": "anchor-01-math-formal",
+      "witness_ref": "nodes/anchors/anchor-01-math-formal/witness/wit-claim-a04-agentic-immune-system-internal-proof-20260512-v1-from-anchor-01-math-formal.json"
+    },
+    {
+      "node_coordinate": "Node_05",
+      "node_id": "anchor-05-ecology-earth-systems",
+      "witness_ref": "nodes/anchors/anchor-05-ecology-earth-systems/witness/wit-claim-a04-agentic-immune-system-internal-proof-20260512-v1-from-anchor-05-ecology-earth-systems.json"
+    }
+  ],
+  "externalization_ready": false,
+  "human_review_refs": [
+    "nodes/anchors/anchor-04-complex-systems-cybernetics/claims/reviews/claim-a04-agentic-immune-system-internal-proof-20260512-v1-human-review-1.md"
+  ],
+  "lane": "venture",
+  "node_coordinate": "Node_04",
+  "node_id": "anchor-04-complex-systems-cybernetics",
+  "non_adjacent_witness_count": 2,
+  "promotion": {
+    "requested_stage": "venture_proposal"
+  },
+  "proposal_hash": "4bed9290e39eff1f648c6221bbddce72f37705ec34a8b8977923a67cfd220a05",
+  "public_good_impact_refs": [],
+  "quarantine_complete": false,
+  "red_team_refs": [
+    "nodes/anchors/anchor-04-complex-systems-cybernetics/claims/redteam/claim-a04-agentic-immune-system-internal-proof-20260512-v1-angle-1.md",
+    "nodes/anchors/anchor-04-complex-systems-cybernetics/claims/redteam/claim-a04-agentic-immune-system-internal-proof-20260512-v1-angle-2.md"
+  ],
+  "replaces_prior_frame": false,
+  "requested_stage": "venture_proposal",
+  "status": "witnessed",
+  "summary": "Dharma Swarm produced a proof artifact for agentic immune infrastructure and routed it through existing credibility, Semantic Anekanta, Bhed Gnan, TelosGatekeeper, TelicSeam Outcome, ValueEvent, Contribution, Build Protocol, and Witness Mandala pressure roles.",
+  "threshold_completed_at": "2026-04-26T14:17:20.427819+00:00",
+  "title": "Agentic Era Immune System: internally gated proof artifact",
+  "updated_at": "2026-05-12T14:17:20.427819+00:00",
+  "witness_mandala": {
+    "intention": "Witnessing is reality contact: each role must sharpen, bound, challenge, protect, or create the next test for the claim.",
+    "records": [
+      {
+        "claim_id": "claim-a04-agentic-immune-system-internal-proof-20260512-v1",
+        "confidence": 0.72,
+        "created_at": "2026-05-12T14:17:20.427819+00:00",
+        "evidence_required_to_upgrade": [
+          "A short invariant list",
+          "Explicit failure conditions",
+          "A claim-tier map separating proven, partial, hypothesis, and vision"
+        ],
+        "next_test": "Rewrite the claim as testable invariants before any stronger promotion.",
+        "protected_value": "precision",
+        "role": "formal",
+        "stance": "clarify",
+        "strongest_affirmation": "Agentic Era Immune System: internally gated proof artifact has a named claim packet, artifact references, and stage request.",
+        "strongest_objection": "The claim must define exactly what would count as evidence, success, and overreach.",
+        "what_would_make_this_false": "The claim fails if its key terms cannot be expressed as inspectable invariants or falsifiable conditions.",
+        "witness_id": "mandala-claim-a04-agentic-immune-system-internal-proof-20260512-v1-formal",
+        "witness_ref": "nodes/anchors/anchor-04-complex-systems-cybernetics/claims/witness_mandala/claim-a04-agentic-immune-system-internal-proof-20260512-v1-formal.json"
+      },
+      {
+        "claim_id": "claim-a04-agentic-immune-system-internal-proof-20260512-v1",
+        "confidence": 0.72,
+        "created_at": "2026-05-12T14:17:20.427819+00:00",
+        "evidence_required_to_upgrade": [
+          "Passing scoped tests",
+          "Runtime entrypoint references",
+          "A replayable command that reproduces the artifact state"
+        ],
+        "next_test": "Run the smallest deterministic proof command from a clean checkout.",
+        "protected_value": "operational truth",
+        "role": "engineering",
+        "stance": "verify",
+        "strongest_affirmation": "The claim has concrete artifacts that can be inspected by code and validators.",
+        "strongest_objection": "A wired file path is not the same as a production runtime path.",
+        "what_would_make_this_false": "The claim fails if referenced code, tests, state stores, or command paths do not exist or cannot be rerun.",
+        "witness_id": "mandala-claim-a04-agentic-immune-system-internal-proof-20260512-v1-engineering",
+        "witness_ref": "nodes/anchors/anchor-04-complex-systems-cybernetics/claims/witness_mandala/claim-a04-agentic-immune-system-internal-proof-20260512-v1-engineering.json"
+      },
+      {
+        "claim_id": "claim-a04-agentic-immune-system-internal-proof-20260512-v1",
+        "confidence": 0.72,
+        "created_at": "2026-05-12T14:17:20.427819+00:00",
+        "evidence_required_to_upgrade": [
+          "A red-team memo with failure modes",
+          "A rejected or narrowed claim captured in the record",
+          "A next test created from the strongest objection"
+        ],
+        "next_test": "Force the claim through one hostile reading and incorporate a narrowing correction.",
+        "protected_value": "anti-slop",
+        "role": "adversarial",
+        "stance": "challenge",
+        "strongest_affirmation": "The claim is stronger when it survives direct pressure against inflation and circular evidence.",
+        "strongest_objection": "The system may be rewarding its own language instead of contact with reality.",
+        "what_would_make_this_false": "The claim fails if it depends on self-approval, vague witness records, or unsupported superiority claims.",
+        "witness_id": "mandala-claim-a04-agentic-immune-system-internal-proof-20260512-v1-adversarial",
+        "witness_ref": "nodes/anchors/anchor-04-complex-systems-cybernetics/claims/witness_mandala/claim-a04-agentic-immune-system-internal-proof-20260512-v1-adversarial.json"
+      },
+      {
+        "claim_id": "claim-a04-agentic-immune-system-internal-proof-20260512-v1",
+        "confidence": 0.72,
+        "created_at": "2026-05-12T14:17:20.427819+00:00",
+        "evidence_required_to_upgrade": [
+          "A named buyer profile",
+          "A painful existing workflow",
+          "A willingness-to-pay interview or paid pilot signal"
+        ],
+        "next_test": "Identify one buyer and one narrow paid pilot question.",
+        "protected_value": "non-extractive viability",
+        "role": "economic",
+        "stance": "price",
+        "strongest_affirmation": "Dharma Swarm produced a proof artifact for agentic immune infrastructure and routed it through existing credibility, Semantic Anekanta, Bhed Gnan, TelosGatekeeper, TelicSeam Outcome, ValueEvent, Contribution, Build Protocol, and Witness Mandala pressure roles. may become valuable if it reduces risk, time, or uncertainty for a real buyer.",
+        "strongest_objection": "A coherent internal proof is not yet evidence of willingness to pay.",
+        "what_would_make_this_false": "The claim fails commercially if no buyer owns the pain or pays for the reduced risk.",
+        "witness_id": "mandala-claim-a04-agentic-immune-system-internal-proof-20260512-v1-economic",
+        "witness_ref": "nodes/anchors/anchor-04-complex-systems-cybernetics/claims/witness_mandala/claim-a04-agentic-immune-system-internal-proof-20260512-v1-economic.json"
+      },
+      {
+        "claim_id": "claim-a04-agentic-immune-system-internal-proof-20260512-v1",
+        "confidence": 0.72,
+        "created_at": "2026-05-12T14:17:20.427819+00:00",
+        "evidence_required_to_upgrade": [
+          "A harm-prevention map",
+          "Capture-risk assessment",
+          "Clear boundaries on what must not be centralized"
+        ],
+        "next_test": "List the harms this system prevents and the harms it could create.",
+        "protected_value": "life and public good",
+        "role": "ecological_social",
+        "stance": "protect",
+        "strongest_affirmation": "The claim matters if it makes powerful agentic systems more accountable and less harmful.",
+        "strongest_objection": "A governance layer can become surveillance, gatekeeping, or institutional capture.",
+        "what_would_make_this_false": "The claim fails if it increases control without correction, consent, or public-good accountability.",
+        "witness_id": "mandala-claim-a04-agentic-immune-system-internal-proof-20260512-v1-ecological_social",
+        "witness_ref": "nodes/anchors/anchor-04-complex-systems-cybernetics/claims/witness_mandala/claim-a04-agentic-immune-system-internal-proof-20260512-v1-ecological_social.json"
+      },
+      {
+        "claim_id": "claim-a04-agentic-immune-system-internal-proof-20260512-v1",
+        "confidence": 0.72,
+        "created_at": "2026-05-12T14:17:20.427819+00:00",
+        "evidence_required_to_upgrade": [
+          "Human boundary decisions",
+          "Red lines",
+          "A next question that genuinely requires human authority"
+        ],
+        "next_test": "Ask only the smallest human decision needed to advance the claim.",
+        "protected_value": "truth, consent, and telos",
+        "role": "human_telos",
+        "stance": "orient",
+        "strongest_affirmation": "The claim is meaningful only if it preserves purpose, human authority, and truthful memory.",
+        "strongest_objection": "The system can overload the founder if it asks the human to hold every boundary manually.",
+        "what_would_make_this_false": "The claim fails if it creates more cognitive burden, spiritual inflation, or vague authority.",
+        "witness_id": "mandala-claim-a04-agentic-immune-system-internal-proof-20260512-v1-human_telos",
+        "witness_ref": "nodes/anchors/anchor-04-complex-systems-cybernetics/claims/witness_mandala/claim-a04-agentic-immune-system-internal-proof-20260512-v1-human_telos.json"
+      }
+    ],
+    "required_roles": [
+      "formal",
+      "engineering",
+      "adversarial",
+      "economic",
+      "ecological_social",
+      "human_telos"
+    ],
+    "version": "1.0"
+  },
+  "witness_mandala_refs": [
+    "nodes/anchors/anchor-04-complex-systems-cybernetics/claims/witness_mandala/claim-a04-agentic-immune-system-internal-proof-20260512-v1-formal.json",
+    "nodes/anchors/anchor-04-complex-systems-cybernetics/claims/witness_mandala/claim-a04-agentic-immune-system-internal-proof-20260512-v1-engineering.json",
+    "nodes/anchors/anchor-04-complex-systems-cybernetics/claims/witness_mandala/claim-a04-agentic-immune-system-internal-proof-20260512-v1-adversarial.json",
+    "nodes/anchors/anchor-04-complex-systems-cybernetics/claims/witness_mandala/claim-a04-agentic-immune-system-internal-proof-20260512-v1-economic.json",
+    "nodes/anchors/anchor-04-complex-systems-cybernetics/claims/witness_mandala/claim-a04-agentic-immune-system-internal-proof-20260512-v1-ecological_social.json",
+    "nodes/anchors/anchor-04-complex-systems-cybernetics/claims/witness_mandala/claim-a04-agentic-immune-system-internal-proof-20260512-v1-human_telos.json"
+  ],
+  "witness_mandala_required": true
+}

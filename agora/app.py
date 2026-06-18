@@ -27,8 +27,14 @@ from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel, Field, field_validator
 
 from .config import SAB_VERSION, get_db_path
-from .gates import ALL_GATES, GateResult, calculate_quality, verify_content
+from .gates import ALL_GATES, evaluate_submission_gates
 from .rv_signal import measure_rv_signal
+from .witness_service import (
+    PUBLICATION_WITNESS_DOMAIN,
+    attach_witness_meta,
+    decode_related_link_ids,
+    encode_related_link_ids,
+)
 
 try:
     from nacl.encoding import HexEncoder
@@ -39,7 +45,7 @@ except ImportError as exc:  # pragma: no cover - runtime safety
 
 
 DEFAULT_SPARK_DB = get_db_path().with_name("spark.db")
-SPARK_DB = Path(os.getenv("SAB_SPARK_DB_PATH", str(DEFAULT_SPARK_DB)))
+SPARK_DB = Path(os.getenv("SAB_SPARK_DB_PATH", os.getenv("SAB_AUTHORITY_DB_PATH", str(DEFAULT_SPARK_DB))))
 SYSTEM_KEY_PATH = Path(
     os.getenv(
         "SAB_SYSTEM_WITNESS_KEY",
@@ -48,11 +54,20 @@ SYSTEM_KEY_PATH = Path(
 )
 CANON_QUORUM = int(os.getenv("SAB_CANON_QUORUM", "3"))
 APP_DIR = Path(__file__).resolve().parent
+REPO_ROOT = APP_DIR.parent
 TEMPLATES_DIR = APP_DIR / "templates"
 STATIC_DIR = APP_DIR / "static"
+SEED_CLAIMS_PATH = Path(
+    os.getenv(
+        "SAB_SEED_CLAIMS_PATH",
+        str(REPO_ROOT / "site" / "data" / "seed_claims.json"),
+    )
+)
 WEB_SESSION_COOKIE = "sab_web_session"
 WEB_SESSION_MAX_AGE_SECONDS = int(os.getenv("SAB_WEB_SESSION_MAX_AGE_SECONDS", str(7 * 24 * 3600)))
 WEB_CACHE_TTL_SECONDS = int(os.getenv("SAB_WEB_CACHE_TTL_SECONDS", "15"))
+WEB_AGENT_TABLE = "web_agents"
+SPARK_WITNESS_TABLE = "spark_witness_chain"
 
 # Canonical 17-dimension profile used for UI visualization.
 SAB_17_DIMENSIONS: List[Dict[str, str]] = [
@@ -193,6 +208,116 @@ def _rv_card(gate_scores: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
+def _json_string_list(raw: Any) -> List[str]:
+    if raw is None:
+        return []
+    if isinstance(raw, list):
+        return [str(item) for item in raw if str(item).strip()]
+    if isinstance(raw, str):
+        text = raw.strip()
+        if not text:
+            return []
+        try:
+            decoded = json.loads(text)
+        except json.JSONDecodeError:
+            return [text]
+        if isinstance(decoded, list):
+            return [str(item) for item in decoded if str(item).strip()]
+        if isinstance(decoded, str) and decoded.strip():
+            return [decoded]
+    return []
+
+
+def _seed_claim_payload() -> Dict[str, Any]:
+    if not SEED_CLAIMS_PATH.exists():
+        return {"claims": [], "stats": {"missing": str(SEED_CLAIMS_PATH)}}
+    try:
+        payload = json.loads(SEED_CLAIMS_PATH.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        return {"claims": [], "stats": {"error": str(exc), "path": str(SEED_CLAIMS_PATH)}}
+    if not isinstance(payload, dict):
+        return {"claims": [], "stats": {"error": "seed claims payload is not an object"}}
+    claims = payload.get("claims", [])
+    if not isinstance(claims, list):
+        payload["claims"] = []
+    return payload
+
+
+def _founding_seed_claim(payload: Optional[Dict[str, Any]] = None) -> Optional[Dict[str, Any]]:
+    payload = payload if payload is not None else _seed_claim_payload()
+    claims = payload.get("claims", [])
+    if not isinstance(claims, list):
+        return None
+    for claim in claims:
+        if isinstance(claim, dict) and claim.get("founding_seed") is True:
+            return claim
+    for claim in claims:
+        if isinstance(claim, dict):
+            return claim
+    return None
+
+
+def _seed_claim_ref(claim: Dict[str, Any]) -> str:
+    return str(claim.get("claim_path") or claim.get("claim_id") or "").strip()
+
+
+def _bind_seed_claim_to_spark(
+    conn: sqlite3.Connection,
+    *,
+    spark_id: int,
+    claim: Dict[str, Any],
+    sublation_status: str = "linked",
+) -> None:
+    claim_ref = _seed_claim_ref(claim)
+    if not claim_ref:
+        raise ValueError("seed claim has no claim_path or claim_id")
+    conn.execute(
+        """
+        UPDATE sparks
+        SET node_coordinate = ?,
+            claim_packet_ref = ?,
+            artifact_refs_json = ?,
+            red_team_refs_json = ?,
+            witness_refs_json = ?,
+            lineage_root_id = COALESCE(lineage_root_id, ?),
+            sublation_status = ?,
+            founding_seed = ?
+        WHERE id = ?
+        """,
+        (
+            str(claim.get("node_coordinate") or ""),
+            claim_ref,
+            json.dumps(_json_string_list(claim.get("artifact_refs")), sort_keys=True),
+            json.dumps(_json_string_list(claim.get("red_team_refs")), sort_keys=True),
+            json.dumps(_json_string_list(claim.get("witness_refs")), sort_keys=True),
+            spark_id,
+            sublation_status,
+            1 if claim.get("founding_seed") is True else 0,
+            spark_id,
+        ),
+    )
+
+
+def _seed_spark_id(conn: sqlite3.Connection, claim: Dict[str, Any]) -> Optional[int]:
+    claim_ref = _seed_claim_ref(claim)
+    if not claim_ref:
+        return None
+    row = conn.execute(
+        """
+        SELECT id
+        FROM sparks
+        WHERE claim_packet_ref = ?
+        ORDER BY
+            CASE status WHEN 'canon' THEN 0 WHEN 'spark' THEN 1 ELSE 2 END,
+            founding_seed DESC,
+            id DESC
+        LIMIT 1
+        """,
+        (claim_ref,),
+    ).fetchone()
+    return int(row["id"]) if row is not None else None
+
+
 def _cache_get(key: str) -> Optional[Any]:
     entry = _WEB_CACHE.get(key)
     if not entry:
@@ -258,7 +383,7 @@ def _create_web_session(conn: sqlite3.Connection, display_name: str) -> Dict[str
     agent_id = hashlib.sha256(public_key_hex.encode()).hexdigest()[:16]
     conn.execute(
         """
-        INSERT OR IGNORE INTO agents (id, name, public_key, created_at, witness_count, witness_accuracy)
+        INSERT OR IGNORE INTO web_agents (id, name, public_key, created_at, witness_count, witness_accuracy)
         VALUES (?, ?, ?, ?, 0, 0.0)
         """,
         (agent_id, clean_name, public_key_hex, _utc_now()),
@@ -355,13 +480,42 @@ def _ensure_column(conn: sqlite3.Connection, table: str, col_name: str, col_def:
         cursor.execute(f"ALTER TABLE {table} ADD COLUMN {col_def}")
 
 
+def _table_exists(conn: sqlite3.Connection, table: str) -> bool:
+    _assert_safe_identifier(table)
+    row = conn.execute(
+        "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?",
+        (table,),
+    ).fetchone()
+    return row is not None
+
+
+def _table_columns(conn: sqlite3.Connection, table: str) -> set[str]:
+    _assert_safe_identifier(table)
+    cursor = conn.cursor()
+    cursor.execute(f"PRAGMA table_info({table})")
+    return {str(row[1]) for row in cursor.fetchall()}
+
+
+def _migrate_legacy_public_tables(conn: sqlite3.Connection) -> None:
+    if not _table_exists(conn, WEB_AGENT_TABLE) and _table_exists(conn, "agents"):
+        cols = _table_columns(conn, "agents")
+        if {"id", "public_key", "witness_count", "witness_accuracy"}.issubset(cols):
+            conn.execute(f"ALTER TABLE agents RENAME TO {WEB_AGENT_TABLE}")
+
+    if not _table_exists(conn, SPARK_WITNESS_TABLE) and _table_exists(conn, "witness_chain"):
+        cols = _table_columns(conn, "witness_chain")
+        if {"spark_id", "witness_id", "signature", "payload"}.issubset(cols):
+            conn.execute(f"ALTER TABLE witness_chain RENAME TO {SPARK_WITNESS_TABLE}")
+
+
 def init_db() -> None:
     with _db() as conn:
         cursor = conn.cursor()
+        _migrate_legacy_public_tables(conn)
 
         cursor.execute(
-            """
-            CREATE TABLE IF NOT EXISTS agents (
+            f"""
+            CREATE TABLE IF NOT EXISTS {WEB_AGENT_TABLE} (
                 id TEXT PRIMARY KEY,
                 name TEXT NOT NULL,
                 public_key TEXT NOT NULL UNIQUE,
@@ -389,8 +543,20 @@ def init_db() -> None:
         )
         _ensure_column(conn, "sparks", "rv_contraction", "rv_contraction REAL")
         _ensure_column(conn, "sparks", "composite_score", "composite_score REAL DEFAULT 0.0")
+        _ensure_column(conn, "sparks", "node_coordinate", "node_coordinate TEXT")
+        _ensure_column(conn, "sparks", "claim_packet_ref", "claim_packet_ref TEXT")
+        _ensure_column(conn, "sparks", "artifact_refs_json", "artifact_refs_json TEXT NOT NULL DEFAULT '[]'")
+        _ensure_column(conn, "sparks", "red_team_refs_json", "red_team_refs_json TEXT NOT NULL DEFAULT '[]'")
+        _ensure_column(conn, "sparks", "witness_refs_json", "witness_refs_json TEXT NOT NULL DEFAULT '[]'")
+        _ensure_column(conn, "sparks", "lineage_root_id", "lineage_root_id INTEGER")
+        _ensure_column(conn, "sparks", "parent_spark_id", "parent_spark_id INTEGER")
+        _ensure_column(conn, "sparks", "sublation_status", "sublation_status TEXT")
+        _ensure_column(conn, "sparks", "founding_seed", "founding_seed INTEGER NOT NULL DEFAULT 0")
         cursor.execute(
             "CREATE INDEX IF NOT EXISTS idx_sparks_status_created ON sparks(status, created_at DESC)"
+        )
+        cursor.execute(
+            "CREATE INDEX IF NOT EXISTS idx_sparks_claim_packet_ref ON sparks(claim_packet_ref)"
         )
 
         # Note: auth.py uses a different `challenges` table for login challenges.
@@ -407,13 +573,18 @@ def init_db() -> None:
             )
             """
         )
+        _ensure_column(conn, "spark_challenges", "resolved_at", "resolved_at TEXT")
+        _ensure_column(conn, "spark_challenges", "successor_spark_id", "successor_spark_id INTEGER")
+        _ensure_column(conn, "spark_challenges", "correction_artifact", "correction_artifact TEXT")
+        _ensure_column(conn, "spark_challenges", "correction_content_sha256", "correction_content_sha256 TEXT")
+        _ensure_column(conn, "spark_challenges", "sublation_witness_hash", "sublation_witness_hash TEXT")
         cursor.execute(
             "CREATE INDEX IF NOT EXISTS idx_spark_challenges_spark ON spark_challenges(spark_id, created_at DESC)"
         )
 
         cursor.execute(
-            """
-            CREATE TABLE IF NOT EXISTS witness_chain (
+            f"""
+            CREATE TABLE IF NOT EXISTS {SPARK_WITNESS_TABLE} (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 spark_id INTEGER,
                 witness_id TEXT NOT NULL,
@@ -421,16 +592,35 @@ def init_db() -> None:
                 action TEXT NOT NULL,
                 payload TEXT NOT NULL,
                 timestamp TEXT NOT NULL,
+                witness_domain TEXT NOT NULL DEFAULT 'publication',
+                witness_link_id TEXT,
+                related_link_ids_json TEXT NOT NULL DEFAULT '[]',
                 prev_hash TEXT,
                 hash TEXT NOT NULL
             )
             """
         )
-        cursor.execute(
-            "CREATE INDEX IF NOT EXISTS idx_witness_chain_spark ON witness_chain(spark_id, id ASC)"
+        _ensure_column(
+            conn,
+            SPARK_WITNESS_TABLE,
+            "witness_domain",
+            "witness_domain TEXT DEFAULT 'publication'",
+        )
+        _ensure_column(conn, SPARK_WITNESS_TABLE, "witness_link_id", "witness_link_id TEXT")
+        _ensure_column(
+            conn,
+            SPARK_WITNESS_TABLE,
+            "related_link_ids_json",
+            "related_link_ids_json TEXT NOT NULL DEFAULT '[]'",
         )
         cursor.execute(
-            "CREATE INDEX IF NOT EXISTS idx_witness_chain_witness ON witness_chain(witness_id, id DESC)"
+            f"CREATE INDEX IF NOT EXISTS idx_{SPARK_WITNESS_TABLE}_spark ON {SPARK_WITNESS_TABLE}(spark_id, id ASC)"
+        )
+        cursor.execute(
+            f"CREATE INDEX IF NOT EXISTS idx_{SPARK_WITNESS_TABLE}_witness ON {SPARK_WITNESS_TABLE}(witness_id, id DESC)"
+        )
+        cursor.execute(
+            f"CREATE INDEX IF NOT EXISTS idx_{SPARK_WITNESS_TABLE}_link ON {SPARK_WITNESS_TABLE}(witness_link_id)"
         )
 
 
@@ -459,6 +649,27 @@ def _message_for_challenge(spark_id: int, challenger_id: str, content_sha256: st
     )
 
 
+def _message_for_sublation(
+    challenge_id: int,
+    predecessor_spark_id: int,
+    corrector_id: str,
+    successor_content_sha256: str,
+    artifact_ref_sha256: str,
+    note_sha256: str,
+) -> bytes:
+    return _canonical_bytes(
+        {
+            "kind": "spark_challenge_sublation",
+            "challenge_id": challenge_id,
+            "predecessor_spark_id": predecessor_spark_id,
+            "corrector_id": corrector_id,
+            "successor_content_sha256": successor_content_sha256,
+            "artifact_ref_sha256": artifact_ref_sha256,
+            "note_sha256": note_sha256,
+        }
+    )
+
+
 def _message_for_witness(spark_id: int, witness_id: str, action: str, payload_sha256: str) -> bytes:
     return _canonical_bytes(
         {
@@ -472,7 +683,7 @@ def _message_for_witness(spark_id: int, witness_id: str, action: str, payload_sh
 
 
 def _verify_agent_signature(conn: sqlite3.Connection, agent_id: str, message: bytes, signature_hex: str) -> None:
-    row = conn.execute("SELECT public_key FROM agents WHERE id = ?", (agent_id,)).fetchone()
+    row = conn.execute(f"SELECT public_key FROM {WEB_AGENT_TABLE} WHERE id = ?", (agent_id,)).fetchone()
     if row is None:
         raise HTTPException(status_code=404, detail=f"Unknown agent: {agent_id}")
 
@@ -492,12 +703,26 @@ def _append_witness(
     action: str,
     payload: Dict[str, Any],
     signature_hex: str,
+    witness_link_id: Optional[str] = None,
+    related_link_ids: Optional[List[str]] = None,
 ) -> Dict[str, Any]:
     timestamp = _utc_now()
-    payload_json = json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=True)
+    witness_link_id, payload_with_meta, normalized_related = attach_witness_meta(
+        payload,
+        domain=PUBLICATION_WITNESS_DOMAIN,
+        action=action,
+        actor_id=witness_id,
+        subject_type="spark",
+        subject_id=spark_id,
+        origin="agora.app",
+        witness_link_id=witness_link_id,
+        related_link_ids=related_link_ids,
+    )
+    payload_json = json.dumps(payload_with_meta, sort_keys=True, separators=(",", ":"), ensure_ascii=True)
+    related_link_ids_json = encode_related_link_ids(normalized_related)
 
     prev_row = conn.execute(
-        "SELECT hash FROM witness_chain WHERE spark_id IS ? ORDER BY id DESC LIMIT 1",
+        f"SELECT hash FROM {SPARK_WITNESS_TABLE} WHERE spark_id IS ? ORDER BY id DESC LIMIT 1",
         (spark_id,),
     ).fetchone()
     prev_hash = str(prev_row["hash"]) if prev_row else "genesis"
@@ -509,23 +734,57 @@ def _append_witness(
         "action": action,
         "payload": payload_json,
         "timestamp": timestamp,
+        "witness_domain": PUBLICATION_WITNESS_DOMAIN,
+        "witness_link_id": witness_link_id,
+        "related_link_ids_json": related_link_ids_json,
         "prev_hash": prev_hash,
     }
     entry_hash = _sha256_hex(_canonical_bytes(unhashed_entry))
 
     conn.execute(
         """
-        INSERT INTO witness_chain
-            (spark_id, witness_id, signature, action, payload, timestamp, prev_hash, hash)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO spark_witness_chain
+            (
+                spark_id,
+                witness_id,
+                signature,
+                action,
+                payload,
+                timestamp,
+                witness_domain,
+                witness_link_id,
+                related_link_ids_json,
+                prev_hash,
+                hash
+            )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
-        (spark_id, witness_id, signature_hex, action, payload_json, timestamp, prev_hash, entry_hash),
+        (
+            spark_id,
+            witness_id,
+            signature_hex,
+            action,
+            payload_json,
+            timestamp,
+            PUBLICATION_WITNESS_DOMAIN,
+            witness_link_id,
+            related_link_ids_json,
+            prev_hash,
+            entry_hash,
+        ),
     )
 
     return {
         **unhashed_entry,
         "hash": entry_hash,
+        "related_link_ids": normalized_related,
     }
+
+
+def _serialize_public_witness_row(row: sqlite3.Row) -> Dict[str, Any]:
+    item = dict(row)
+    item["related_link_ids"] = decode_related_link_ids(item.get("related_link_ids_json"))
+    return item
 
 
 def _load_gate_scores(raw: str) -> Dict[str, Any]:
@@ -538,27 +797,8 @@ def _load_gate_scores(raw: str) -> Dict[str, Any]:
     return parsed
 
 
-def _build_gate_payload(
-    evidence: List[Any],
-    evidence_hash: str,
-    rv_signal: Dict[str, Any],
-) -> Dict[str, Any]:
-    dimensions: Dict[str, Any] = {}
-    for item in evidence:
-        if item.result == GateResult.PASSED:
-            score = float(item.confidence)
-        elif item.result == GateResult.WARNING:
-            score = float(item.confidence) * 0.5
-        else:
-            score = 0.0
-        dimensions[item.gate_name] = {
-            "score": round(max(0.0, min(1.0, score)), 6),
-            "result": item.result.value,
-            "reason": item.reason,
-        }
-
-    composite = round(float(calculate_quality(evidence)), 6)
-    ahimsa_state = dimensions.get("ahimsa", {}).get("result", "passed")
+def _with_rv_signal(gate_scores: Dict[str, Any], rv_signal: Dict[str, Any]) -> Dict[str, Any]:
+    dimensions = gate_scores.get("dimensions", {})
     rv_value = rv_signal.get("rv")
     warning_set = {str(w) for w in rv_signal.get("warnings", []) if isinstance(w, str)}
     if rv_value is not None:
@@ -570,10 +810,8 @@ def _build_gate_payload(
     else:
         rv_state = "uncertain"
     return {
+        **gate_scores,
         "dimensions": dimensions,
-        "composite": composite,
-        "evidence_hash": evidence_hash,
-        "ahimsa_passed": ahimsa_state != "failed",
         "rv_contraction": rv_value,
         "rv_measurement_state": rv_state,
         "rv_signal": rv_signal,
@@ -599,6 +837,15 @@ def _spark_counts_for_author(conn: sqlite3.Connection, author_id: str) -> Dict[s
     return {"hour": hour_count, "day": day_count}
 
 
+def _pending_challenge_count(conn: sqlite3.Connection, spark_id: int) -> int:
+    return int(
+        conn.execute(
+            "SELECT COUNT(*) AS c FROM spark_challenges WHERE spark_id = ? AND resolution = 'pending'",
+            (spark_id,),
+        ).fetchone()["c"]
+    )
+
+
 def _verify_chain_rows(rows: List[sqlite3.Row]) -> bool:
     prev_hash = "genesis"
     for row in rows:
@@ -609,6 +856,9 @@ def _verify_chain_rows(rows: List[sqlite3.Row]) -> bool:
             "action": row["action"],
             "payload": row["payload"],
             "timestamp": row["timestamp"],
+            "witness_domain": row["witness_domain"],
+            "witness_link_id": row["witness_link_id"],
+            "related_link_ids_json": row["related_link_ids_json"],
             "prev_hash": row["prev_hash"],
         }
         expected_hash = _sha256_hex(_canonical_bytes(material))
@@ -626,11 +876,13 @@ def _promote_if_quorum(conn: sqlite3.Connection, spark_id: int) -> Optional[Dict
         return None
     if str(row["status"]) == "canon":
         return None
+    if _pending_challenge_count(conn, spark_id) > 0:
+        return None
 
     witnesses = conn.execute(
         """
         SELECT DISTINCT witness_id
-        FROM witness_chain
+        FROM spark_witness_chain
         WHERE spark_id = ? AND action IN ('affirm', 'canon_affirm')
         """,
         (spark_id,),
@@ -665,7 +917,16 @@ def _promote_if_quorum(conn: sqlite3.Connection, spark_id: int) -> Optional[Dict
 
 def _serialize_spark_row(row: sqlite3.Row) -> Dict[str, Any]:
     raw_gate_scores = row["gate_scores"]
-    return {
+    keys = set(row.keys())
+
+    def val(name: str, default: Any = None) -> Any:
+        return row[name] if name in keys else default
+
+    claim_packet_ref = str(val("claim_packet_ref") or "")
+    artifact_refs = _json_string_list(val("artifact_refs_json"))
+    red_team_refs = _json_string_list(val("red_team_refs_json"))
+    witness_refs = _json_string_list(val("witness_refs_json"))
+    item = {
         "id": int(row["id"]),
         "content": str(row["content"] or ""),
         "content_type": str(row["content_type"] or "text"),
@@ -675,6 +936,93 @@ def _serialize_spark_row(row: sqlite3.Row) -> Dict[str, Any]:
         "rv_contraction": row["rv_contraction"],
         "composite_score": float(row["composite_score"] or 0.0),
         "gate_scores": _load_gate_scores(str(raw_gate_scores) if raw_gate_scores is not None else "{}"),
+        "node_coordinate": str(val("node_coordinate") or ""),
+        "claim_packet_ref": claim_packet_ref,
+        "claim_packet_refs": [claim_packet_ref] if claim_packet_ref else [],
+        "artifact_refs": artifact_refs,
+        "red_team_refs": red_team_refs,
+        "witness_refs": witness_refs,
+        "lineage_root_id": val("lineage_root_id"),
+        "parent_spark_id": val("parent_spark_id"),
+        "sublation_status": str(val("sublation_status") or ""),
+        "founding_seed": bool(val("founding_seed", 0)),
+    }
+    return item
+
+
+def _serialize_challenge_row(row: sqlite3.Row) -> Dict[str, Any]:
+    item = dict(row)
+    item["id"] = int(item["id"])
+    item["spark_id"] = int(item["spark_id"])
+    if item.get("successor_spark_id") is not None:
+        item["successor_spark_id"] = int(item["successor_spark_id"])
+    return item
+
+
+def _public_witness_entry_for_replay(entry: Dict[str, Any]) -> Dict[str, Any]:
+    item = dict(entry)
+    payload_raw = item.get("payload", "{}")
+    try:
+        item["payload_obj"] = json.loads(str(payload_raw))
+    except json.JSONDecodeError:
+        item["payload_obj"] = {"raw": str(payload_raw)}
+    return item
+
+
+def _spark_chain_payload(conn: sqlite3.Connection, spark_id: int) -> Dict[str, Any]:
+    spark_row = conn.execute("SELECT parent_spark_id FROM sparks WHERE id = ?", (spark_id,)).fetchone()
+    challenge_spark_ids = [spark_id]
+    if spark_row is not None and spark_row["parent_spark_id"] is not None:
+        challenge_spark_ids.append(int(spark_row["parent_spark_id"]))
+    placeholders = ",".join("?" for _ in challenge_spark_ids)
+    rows = conn.execute(
+        """
+        SELECT id, spark_id, witness_id, signature, action, payload, timestamp,
+               witness_domain, witness_link_id, related_link_ids_json, prev_hash, hash
+        FROM spark_witness_chain
+        WHERE spark_id = ?
+        ORDER BY id ASC
+        """,
+        (spark_id,),
+    ).fetchall()
+    challenge_rows = conn.execute(
+        f"""
+        SELECT id, spark_id, challenger_id, content, created_at, resolution,
+               resolved_at, successor_spark_id, correction_artifact,
+               correction_content_sha256, sublation_witness_hash
+        FROM spark_challenges
+        WHERE spark_id IN ({placeholders})
+        ORDER BY spark_id ASC, id ASC
+        """,
+        tuple(challenge_spark_ids),
+    ).fetchall()
+    entries = [_serialize_public_witness_row(row) for row in rows]
+    replay_entries = [_public_witness_entry_for_replay(entry) for entry in entries]
+    challenges = [_serialize_challenge_row(row) for row in challenge_rows]
+    return {
+        "spark_id": spark_id,
+        "verified": _verify_chain_rows(rows),
+        "entries": entries,
+        "challenges": challenges,
+        "replay": {
+            "attacks": challenges,
+            "corrections": [
+                entry
+                for entry in replay_entries
+                if entry["action"] in ("challenge_sublated", "sublation_successor")
+            ],
+            "canon_events": [entry for entry in replay_entries if entry["action"] == "canon_promoted"],
+            "successor_links": [
+                {
+                    "challenge_id": challenge["id"],
+                    "predecessor_spark_id": challenge["spark_id"],
+                    "successor_spark_id": challenge.get("successor_spark_id"),
+                    "sublation_witness_hash": challenge.get("sublation_witness_hash"),
+                }
+                for challenge in challenges
+                if challenge.get("successor_spark_id") is not None
+            ],
+        },
     }
 
 
@@ -682,7 +1030,7 @@ def _compost_why_card(conn: sqlite3.Connection, spark_id: int, gate_scores: Dict
     witness_row = conn.execute(
         """
         SELECT payload
-        FROM witness_chain
+        FROM spark_witness_chain
         WHERE spark_id = ? AND action = 'compost'
         ORDER BY id DESC
         LIMIT 1
@@ -742,7 +1090,7 @@ def _web_feed_items(
             SELECT
                 s.*,
                 (SELECT COUNT(*) FROM spark_challenges c WHERE c.spark_id = s.id) AS challenge_count,
-                (SELECT COUNT(*) FROM witness_chain w WHERE w.spark_id = s.id) AS witness_count
+                (SELECT COUNT(*) FROM spark_witness_chain w WHERE w.spark_id = s.id) AS witness_count
             FROM sparks s
             ORDER BY s.created_at DESC
             LIMIT ?
@@ -755,7 +1103,7 @@ def _web_feed_items(
             SELECT
                 s.*,
                 (SELECT COUNT(*) FROM spark_challenges c WHERE c.spark_id = s.id) AS challenge_count,
-                (SELECT COUNT(*) FROM witness_chain w WHERE w.spark_id = s.id) AS witness_count
+                (SELECT COUNT(*) FROM spark_witness_chain w WHERE w.spark_id = s.id) AS witness_count
             FROM sparks s
             WHERE s.status = ?
             ORDER BY s.created_at DESC
@@ -809,6 +1157,15 @@ class ChallengeCreateRequest(BaseModel):
     signature: str = Field(..., min_length=64)
 
 
+class ChallengeSublationRequest(BaseModel):
+    corrector_id: str = Field(..., min_length=8, max_length=64)
+    corrected_content: str = Field(..., min_length=1, max_length=12000)
+    content_type: Literal["text", "code", "link"] = "text"
+    artifact_ref: Optional[str] = Field(default=None, max_length=2000)
+    note: str = Field("", max_length=1000)
+    signature: str = Field(..., min_length=64)
+
+
 class WitnessSignRequest(BaseModel):
     spark_id: int
     witness_id: str = Field(..., min_length=8, max_length=64)
@@ -847,12 +1204,12 @@ async def register_agent(req: AgentRegisterRequest) -> Dict[str, Any]:
     with _db() as conn:
         conn.execute(
             """
-            INSERT OR IGNORE INTO agents (id, name, public_key, created_at, witness_count, witness_accuracy)
+            INSERT OR IGNORE INTO web_agents (id, name, public_key, created_at, witness_count, witness_accuracy)
             VALUES (?, ?, ?, ?, 0, 0.0)
             """,
             (agent_id, req.name, req.public_key, created_at),
         )
-        row = conn.execute("SELECT * FROM agents WHERE id = ?", (agent_id,)).fetchone()
+        row = conn.execute(f"SELECT * FROM {WEB_AGENT_TABLE} WHERE id = ?", (agent_id,)).fetchone()
     if row is None:
         raise HTTPException(status_code=500, detail="failed to register agent")
     return {
@@ -873,7 +1230,7 @@ async def submit_spark(req: SparkSubmitRequest) -> Dict[str, Any]:
         _verify_agent_signature(conn, req.author_id, submit_message, req.signature)
 
         agent_row = conn.execute(
-            "SELECT id, name, created_at FROM agents WHERE id = ?",
+            f"SELECT id, name, created_at FROM {WEB_AGENT_TABLE} WHERE id = ?",
             (req.author_id,),
         ).fetchone()
         if agent_row is None:
@@ -901,9 +1258,9 @@ async def submit_spark(req: SparkSubmitRequest) -> Dict[str, Any]:
             "author_reputation": 0.0,
             "recent_content_hashes": recent_hashes,
         }
-        passed, evidence, evidence_hash = verify_content(req.content, req.author_id, gate_context)
+        gate_scores, _, _, _ = evaluate_submission_gates(req.content, req.author_id, gate_context)
         rv_signal = measure_rv_signal(req.content)
-        gate_scores = _build_gate_payload(evidence, evidence_hash, rv_signal)
+        gate_scores = _with_rv_signal(gate_scores, rv_signal)
         status_value = "spark"
         if not gate_scores.get("ahimsa_passed", True):
             status_value = "compost"
@@ -997,7 +1354,7 @@ async def get_spark(spark_id: int) -> Dict[str, Any]:
         )
         witness_count = int(
             conn.execute(
-                "SELECT COUNT(*) AS c FROM witness_chain WHERE spark_id = ?",
+                f"SELECT COUNT(*) AS c FROM {SPARK_WITNESS_TABLE} WHERE spark_id = ?",
                 (spark_id,),
             ).fetchone()["c"]
         )
@@ -1075,21 +1432,242 @@ async def challenge_spark(spark_id: int, req: ChallengeCreateRequest) -> Dict[st
 async def get_spark_chain(spark_id: int) -> Dict[str, Any]:
     init_db()
     with _db() as conn:
-        rows = conn.execute(
+        return _spark_chain_payload(conn, spark_id)
+
+
+@app.get("/api/spark/{spark_id}/replay")
+async def replay_spark_chain(spark_id: int) -> Dict[str, Any]:
+    init_db()
+    with _db() as conn:
+        return _spark_chain_payload(conn, spark_id)
+
+
+@app.post(
+    "/api/spark/{spark_id}/challenge/{challenge_id}/sublate",
+    status_code=status.HTTP_201_CREATED,
+)
+async def sublate_challenge(
+    spark_id: int,
+    challenge_id: int,
+    req: ChallengeSublationRequest,
+) -> Dict[str, Any]:
+    init_db()
+    corrected_content = req.corrected_content.strip()
+    artifact_ref = (req.artifact_ref or "").strip()
+    note = req.note.strip()
+    if not corrected_content:
+        raise HTTPException(status_code=400, detail="corrected_content is required")
+    successor_content_sha256 = _sha256_hex(corrected_content.encode())
+    artifact_ref_sha256 = _sha256_hex(artifact_ref.encode())
+    note_sha256 = _sha256_hex(note.encode())
+    sublation_message = _message_for_sublation(
+        challenge_id,
+        spark_id,
+        req.corrector_id,
+        successor_content_sha256,
+        artifact_ref_sha256,
+        note_sha256,
+    )
+
+    with _db() as conn:
+        predecessor = conn.execute("SELECT * FROM sparks WHERE id = ?", (spark_id,)).fetchone()
+        if predecessor is None:
+            raise HTTPException(status_code=404, detail="spark not found")
+        challenge = conn.execute(
             """
-            SELECT id, spark_id, witness_id, signature, action, payload, timestamp, prev_hash, hash
-            FROM witness_chain
-            WHERE spark_id = ?
-            ORDER BY id ASC
+            SELECT id, spark_id, challenger_id, content, created_at, resolution
+            FROM spark_challenges
+            WHERE id = ? AND spark_id = ?
             """,
-            (spark_id,),
-        ).fetchall()
-    entries = [dict(row) for row in rows]
-    return {
-        "spark_id": spark_id,
-        "verified": _verify_chain_rows(rows),
-        "entries": entries,
-    }
+            (challenge_id, spark_id),
+        ).fetchone()
+        if challenge is None:
+            raise HTTPException(status_code=404, detail="challenge not found")
+        if str(challenge["resolution"]) != "pending":
+            raise HTTPException(status_code=409, detail="challenge already resolved")
+
+        _verify_agent_signature(conn, req.corrector_id, sublation_message, req.signature)
+
+        corrector_row = conn.execute(
+            f"SELECT id, name, created_at FROM {WEB_AGENT_TABLE} WHERE id = ?",
+            (req.corrector_id,),
+        ).fetchone()
+        if corrector_row is None:
+            raise HTTPException(status_code=404, detail=f"Unknown agent: {req.corrector_id}")
+
+        counts = _spark_counts_for_author(conn, req.corrector_id)
+        recent_hashes = [
+            _sha256_hex(str(r["content"]).encode())
+            for r in conn.execute(
+                """
+                SELECT content
+                FROM sparks
+                ORDER BY id DESC
+                LIMIT 50
+                """
+            ).fetchall()
+        ]
+        created_at = datetime.fromisoformat(str(corrector_row["created_at"]))
+        age_hours = max(
+            0.0,
+            (datetime.now(timezone.utc) - created_at.replace(tzinfo=timezone.utc)).total_seconds() / 3600.0,
+        )
+        gate_context = {
+            "author_posts_last_hour": counts["hour"],
+            "author_posts_last_day": counts["day"],
+            "author_age_hours": age_hours,
+            "author_reputation": 0.0,
+            "recent_content_hashes": recent_hashes,
+        }
+        gate_scores, _, _, _ = evaluate_submission_gates(corrected_content, req.corrector_id, gate_context)
+        rv_signal = measure_rv_signal(corrected_content)
+        gate_scores = _with_rv_signal(gate_scores, rv_signal)
+        status_value = "spark"
+        if not gate_scores.get("ahimsa_passed", True):
+            status_value = "compost"
+
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            INSERT INTO sparks
+                (
+                    content,
+                    content_type,
+                    author_id,
+                    created_at,
+                    gate_scores,
+                    status,
+                    rv_contraction,
+                    composite_score,
+                    node_coordinate,
+                    claim_packet_ref,
+                    artifact_refs_json,
+                    red_team_refs_json,
+                    witness_refs_json,
+                    lineage_root_id,
+                    parent_spark_id,
+                    sublation_status,
+                    founding_seed
+                )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                corrected_content,
+                req.content_type,
+                req.corrector_id,
+                _utc_now(),
+                json.dumps(gate_scores, sort_keys=True, separators=(",", ":"), ensure_ascii=True),
+                status_value,
+                gate_scores.get("rv_contraction"),
+                float(gate_scores.get("composite", 0.0)),
+                predecessor["node_coordinate"],
+                predecessor["claim_packet_ref"],
+                predecessor["artifact_refs_json"],
+                predecessor["red_team_refs_json"],
+                predecessor["witness_refs_json"],
+                predecessor["lineage_root_id"] or spark_id,
+                spark_id,
+                "sublated",
+                predecessor["founding_seed"],
+            ),
+        )
+        successor_spark_id = int(cursor.lastrowid)
+        predecessor_content_sha256 = _sha256_hex(str(predecessor["content"]).encode())
+        sublation_payload = {
+            "challenge_id": challenge_id,
+            "predecessor_spark_id": spark_id,
+            "successor_spark_id": successor_spark_id,
+            "predecessor_content_sha256": predecessor_content_sha256,
+            "successor_content_sha256": successor_content_sha256,
+            "artifact_ref": artifact_ref or None,
+            "note": note,
+            "resolution": "sublated",
+        }
+        sublation_entry = _append_witness(
+            conn,
+            spark_id=spark_id,
+            witness_id=req.corrector_id,
+            action="challenge_sublated",
+            payload=sublation_payload,
+            signature_hex=req.signature,
+        )
+
+        related_links = []
+        witness_link_id = sublation_entry.get("witness_link_id")
+        if isinstance(witness_link_id, str) and witness_link_id:
+            related_links.append(witness_link_id)
+        successor_entry = _append_witness(
+            conn,
+            spark_id=successor_spark_id,
+            witness_id=req.corrector_id,
+            action="sublation_successor",
+            payload={**sublation_payload, "role": "corrected_successor"},
+            signature_hex=req.signature,
+            related_link_ids=related_links,
+        )
+
+        system_gate_signature = _system_sign(
+            {
+                "kind": "system_witness",
+                "spark_id": successor_spark_id,
+                "action": "gate_scored",
+                "payload": gate_scores,
+            }
+        )
+        _append_witness(
+            conn,
+            spark_id=successor_spark_id,
+            witness_id="system",
+            action="gate_scored",
+            payload=gate_scores,
+            signature_hex=system_gate_signature,
+        )
+
+        resolved_at = _utc_now()
+        conn.execute(
+            """
+            UPDATE spark_challenges
+            SET resolution = 'sustained',
+                resolved_at = ?,
+                successor_spark_id = ?,
+                correction_artifact = ?,
+                correction_content_sha256 = ?,
+                sublation_witness_hash = ?
+            WHERE id = ?
+            """,
+            (
+                resolved_at,
+                successor_spark_id,
+                artifact_ref or None,
+                successor_content_sha256,
+                str(sublation_entry["hash"]),
+                challenge_id,
+            ),
+        )
+
+        challenge_row = conn.execute(
+            """
+            SELECT id, spark_id, challenger_id, content, created_at, resolution,
+                   resolved_at, successor_spark_id, correction_artifact,
+                   correction_content_sha256, sublation_witness_hash
+            FROM spark_challenges
+            WHERE id = ?
+            """,
+            (challenge_id,),
+        ).fetchone()
+        successor_row = conn.execute("SELECT * FROM sparks WHERE id = ?", (successor_spark_id,)).fetchone()
+        if challenge_row is None or successor_row is None:
+            raise HTTPException(status_code=500, detail="sublation persisted but not found")
+
+        _invalidate_web_cache()
+        return {
+            "challenge": _serialize_challenge_row(challenge_row),
+            "sublation_status": "sublated",
+            "predecessor_spark_id": spark_id,
+            "successor": _serialize_spark_row(successor_row),
+            "sublation_event": sublation_entry,
+            "successor_event": successor_entry,
+        }
 
 
 @app.post("/api/witness/sign")
@@ -1116,7 +1694,7 @@ async def witness_sign(req: WitnessSignRequest) -> Dict[str, Any]:
 
         conn.execute(
             """
-            UPDATE agents
+            UPDATE web_agents
             SET witness_count = COALESCE(witness_count, 0) + 1
             WHERE id = ?
             """,
@@ -1161,15 +1739,16 @@ async def witness_history(agent_id: str, limit: int = Query(50, ge=1, le=500)) -
     with _db() as conn:
         rows = conn.execute(
             """
-            SELECT id, spark_id, witness_id, signature, action, payload, timestamp, prev_hash, hash
-            FROM witness_chain
+            SELECT id, spark_id, witness_id, signature, action, payload, timestamp,
+                   witness_domain, witness_link_id, related_link_ids_json, prev_hash, hash
+            FROM spark_witness_chain
             WHERE witness_id = ?
             ORDER BY id DESC
             LIMIT ?
             """,
             (agent_id, limit),
         ).fetchall()
-    return {"agent_id": agent_id, "entries": [dict(row) for row in rows]}
+    return {"agent_id": agent_id, "entries": [_serialize_public_witness_row(row) for row in rows]}
 
 
 def _load_feed(conn: sqlite3.Connection, *, status_value: str, limit: int, gate_name: str) -> List[Dict[str, Any]]:
@@ -1210,7 +1789,7 @@ def _spark_with_details(conn: sqlite3.Connection, spark_id: int) -> Optional[Dic
         SELECT
             s.*,
             (SELECT COUNT(*) FROM spark_challenges c WHERE c.spark_id = s.id) AS challenge_count,
-            (SELECT COUNT(*) FROM witness_chain w WHERE w.spark_id = s.id) AS witness_count
+            (SELECT COUNT(*) FROM spark_witness_chain w WHERE w.spark_id = s.id) AS witness_count
         FROM sparks s
         WHERE s.id = ?
         """,
@@ -1295,11 +1874,12 @@ async def node_status() -> Dict[str, Any]:
             conn.execute("SELECT COUNT(*) AS c FROM spark_challenges WHERE resolution = 'pending'").fetchone()["c"]
         )
         recent_witness = [
-            dict(row)
+            _serialize_public_witness_row(row)
             for row in conn.execute(
                 """
-                SELECT id, spark_id, witness_id, action, timestamp
-                FROM witness_chain
+                SELECT id, spark_id, witness_id, action, timestamp, witness_domain,
+                       witness_link_id, related_link_ids_json
+                FROM spark_witness_chain
                 ORDER BY id DESC
                 LIMIT 20
                 """
@@ -1440,6 +2020,81 @@ async def web_compost(
     )
 
 
+@app.get("/seed", response_class=HTMLResponse)
+async def web_seed(request: Request) -> HTMLResponse:
+    init_db()
+    seed_payload = _seed_claim_payload()
+    seed_claim = _founding_seed_claim(seed_payload)
+    spark: Optional[Dict[str, Any]] = None
+    challenges: List[Dict[str, Any]] = []
+    timeline: List[Dict[str, Any]] = []
+    replay: Optional[Dict[str, Any]] = None
+
+    with _db() as conn:
+        if seed_claim is not None:
+            spark_id = _seed_spark_id(conn, seed_claim)
+            if spark_id is not None:
+                spark = _spark_with_details(conn, spark_id)
+                challenge_spark_ids = [spark_id]
+                if spark and spark.get("parent_spark_id"):
+                    challenge_spark_ids.append(int(spark["parent_spark_id"]))
+                placeholders = ",".join("?" for _ in challenge_spark_ids)
+                challenge_rows = conn.execute(
+                    f"""
+                    SELECT id, spark_id, challenger_id, content, created_at, resolution,
+                           resolved_at, successor_spark_id, correction_artifact,
+                           correction_content_sha256, sublation_witness_hash
+                    FROM spark_challenges
+                    WHERE spark_id IN ({placeholders})
+                    ORDER BY spark_id ASC, id ASC
+                    """,
+                    tuple(challenge_spark_ids),
+                ).fetchall()
+                challenges = [_serialize_challenge_row(row) for row in challenge_rows]
+                chain_rows = conn.execute(
+                    """
+                    SELECT id, spark_id, witness_id, action, payload, timestamp, prev_hash, hash
+                    FROM spark_witness_chain
+                    WHERE spark_id = ?
+                    ORDER BY id ASC
+                    """,
+                    (spark_id,),
+                ).fetchall()
+                for row in chain_rows:
+                    payload_obj: Any = {}
+                    try:
+                        payload_obj = json.loads(str(row["payload"]))
+                    except json.JSONDecodeError:
+                        payload_obj = {"raw": str(row["payload"])}
+                    timeline.append(
+                        {
+                            "id": int(row["id"]),
+                            "witness_id": str(row["witness_id"]),
+                            "action": str(row["action"]),
+                            "payload": payload_obj,
+                            "timestamp": str(row["timestamp"]),
+                            "hash": str(row["hash"]),
+                            "prev_hash": str(row["prev_hash"]),
+                        }
+                    )
+                replay = _spark_chain_payload(conn, spark_id)
+
+    return _render_template(
+        request,
+        "web_seed.html",
+        {
+            "seed_claim": seed_claim,
+            "seed_payload": seed_payload,
+            "spark": spark,
+            "challenges": challenges,
+            "timeline": timeline,
+            "replay": replay,
+            "session": _read_web_session(request),
+            "path_name": "/seed",
+        },
+    )
+
+
 @app.get("/submit", response_class=HTMLResponse)
 async def web_submit_get(request: Request) -> HTMLResponse:
     session = _read_web_session(request)
@@ -1516,19 +2171,21 @@ async def web_spark_detail(
             raise HTTPException(status_code=404, detail="spark not found")
         challenge_rows = conn.execute(
             """
-            SELECT id, spark_id, challenger_id, content, created_at, resolution
+            SELECT id, spark_id, challenger_id, content, created_at, resolution,
+                   resolved_at, successor_spark_id, correction_artifact,
+                   correction_content_sha256, sublation_witness_hash
             FROM spark_challenges
             WHERE spark_id = ?
             ORDER BY id ASC
             """,
             (spark_id,),
         ).fetchall()
-        challenges = [dict(row) for row in challenge_rows]
+        challenges = [_serialize_challenge_row(row) for row in challenge_rows]
 
         chain_rows = conn.execute(
             """
             SELECT id, spark_id, witness_id, action, payload, timestamp, prev_hash, hash
-            FROM witness_chain
+            FROM spark_witness_chain
             WHERE spark_id = ?
             ORDER BY id ASC
             """,
@@ -1565,6 +2222,7 @@ async def web_spark_detail(
             "submitted": bool(submitted),
             "session": session,
             "csrf_token": csrf,
+            "path_name": "/seed" if spark.get("founding_seed") else "",
         },
     )
 
@@ -1673,7 +2331,7 @@ async def web_agent_profile(request: Request, agent_id: str) -> HTMLResponse:
     init_db()
     with _db() as conn:
         agent = conn.execute(
-            "SELECT id, name, public_key, created_at, witness_count, witness_accuracy FROM agents WHERE id = ?",
+            f"SELECT id, name, public_key, created_at, witness_count, witness_accuracy FROM {WEB_AGENT_TABLE} WHERE id = ?",
             (agent_id,),
         ).fetchone()
         if agent is None:
@@ -1726,7 +2384,7 @@ async def web_agent_profile(request: Request, agent_id: str) -> HTMLResponse:
             conn.execute(
                 """
                 SELECT COUNT(*) AS c
-                FROM witness_chain
+                FROM spark_witness_chain
                 WHERE witness_id = ? AND action IN ('affirm', 'canon_affirm')
                 """,
                 (agent_id,),
@@ -1736,7 +2394,7 @@ async def web_agent_profile(request: Request, agent_id: str) -> HTMLResponse:
             conn.execute(
                 """
                 SELECT COUNT(*) AS c
-                FROM witness_chain w
+                FROM spark_witness_chain w
                 JOIN sparks s ON s.id = w.spark_id
                 WHERE w.witness_id = ? AND w.action IN ('affirm', 'canon_affirm') AND s.status = 'canon'
                 """,
@@ -1780,3 +2438,17 @@ async def web_about(request: Request) -> HTMLResponse:
         "web_about.html",
         {"session": _read_web_session(request), "dimensions_count": len(SAB_17_DIMENSIONS), "path_name": "/about"},
     )
+
+
+def main() -> None:
+    """CLI entrypoint for the public SAB web surface."""
+    import uvicorn
+
+    host = os.getenv("SAB_HOST", "127.0.0.1")
+    port = int(os.getenv("SAB_PORT", "8000"))
+    reload = os.getenv("SAB_RELOAD", "0") == "1"
+    uvicorn.run("agora.app:app", host=host, port=port, reload=reload)
+
+
+if __name__ == "__main__":
+    main()

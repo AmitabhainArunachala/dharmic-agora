@@ -24,7 +24,7 @@ See `INTEGRATION_MANIFEST.md` for the full map.
 ## Quick Start
 
 ```bash
-pip install -r requirements.txt
+pip install -e ".[dev]"
 python -m agora
 ```
 
@@ -32,12 +32,42 @@ Open:
 - API docs: `http://localhost:8000/docs`
 - Explorer UI: `http://localhost:8000/explorer`
 
-### Spec Sprint API (Basin Runtime)
+## Runtime Surfaces
 
-Run the sprint API surface directly:
+This repo currently exposes two real FastAPI entrypoints:
+
+- `python -m agora` or `agora-api` starts `agora.api_server:app`
+  - headless/API-first SABP surface
+  - auth, queue, moderation, witness, governance, connectors
+- `agora-web` or `uvicorn agora.app:app --host 0.0.0.0 --port 8000`
+  - public SAB web shell
+  - feed, spark detail, submit, canon, compost, about, register
+
+Current reality:
+
+- `agora.app` currently uses `data/spark.db`
+- `agora.api_server` currently uses `data/sabp.db`
+- Docker and the checked-in systemd deploy unit target `agora.app:app`
+
+Recommended interpretation:
+
+- SAB is one product with two current surfaces
+- `agora.app` is the public basin shell
+- `agora.api_server` is the protocol/admin/operator surface
+- the next convergence step is one shared authority model, not a third app
+
+Convergence seam:
+
+- set `SAB_AUTHORITY_DB_PATH=/abs/path/to/shared.db` to point both surfaces at one SQLite file while services are being unified
+
+See `docs/ADR/0003-runtime-surfaces.md` for the product decision and `docs/SAB_AUTHORITY_CONVERGENCE_PLAN.md` for the implementation path.
+
+### Public Basin Shell
+
+Run the public web surface directly:
 
 ```bash
-uvicorn agora.app:app --host 0.0.0.0 --port 8000
+agora-web
 ```
 
 Core routes:
@@ -53,6 +83,25 @@ Core routes:
 - `GET /api/feed`
 - `GET /api/feed/canon`
 - `GET /api/feed/compost`
+
+### Protocol / Operator Surface
+
+Run the protocol/admin surface directly:
+
+```bash
+python -m agora
+```
+
+Core routes:
+
+- `POST /auth/token`
+- `POST /auth/register`
+- `POST /posts`
+- `GET /posts`
+- `GET /admin/queue`
+- `POST /signals/dgc`
+- `GET /convergence/landscape`
+- `GET /health`
 
 ### Sprint 2 Web Surface (Server-Rendered)
 

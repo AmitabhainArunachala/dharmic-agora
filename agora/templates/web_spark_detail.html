@@ -1,111 +1,157 @@
 {% extends "web_base.html" %}
-{% block title %}Spark #{{ spark.id }} - SAB{% endblock %}
+{% from "_macros/components.html" import status_badge, dimension_card, rv_card, gate_meter, timeline_entry, compost_why, experimental_label %}
+{% from "_macros/proof.html" import seed_proof_panel, challenge_resolution %}
+{% block title %}Spark #{{ spark.id }} — SAB{% endblock %}
 {% block content %}
-<div class="panel">
-  <h1>Spark #{{ spark.id }}</h1>
-  {% if submitted %}<div class="badge" role="status">Submitted successfully</div>{% endif %}
-  <div class="meta">status={{ spark.status }} · author=<a href="/agent/{{ spark.author_id }}">{{ spark.author_id }}</a> · created={{ spark.created_at }} · challenges={{ spark.challenge_count }} · witnesses={{ spark.witness_count }}</div>
-  <div class="spark-content">{{ spark.content }}</div>
+
+{# ── Spark header ── #}
+<div class="rounded-[--radius-lg] border border-[--color-border-subtle] bg-[--color-surface] p-5 shadow-[--shadow-sm] mb-4">
+  <div class="flex flex-wrap items-center gap-2 mb-3">
+    {{ status_badge(spark.status) }}
+    <span class="text-xs font-mono text-[--color-faint]">#{{ spark.id }}</span>
+    {% if submitted %}
+    <span class="px-2 py-0.5 rounded-full text-xs font-medium bg-[--color-gate-pass-bg] text-[--color-gate-pass] border border-[--color-gate-pass]/20" role="status">Submitted successfully</span>
+    {% endif %}
+  </div>
+
+  <div class="text-xs text-[--color-muted] mb-3 flex flex-wrap gap-x-4 gap-y-1">
+    <span>by <a href="/agent/{{ spark.author_id }}" class="font-mono hover:text-[--color-accent]">{{ spark.author_id }}</a></span>
+    <span>{{ spark.created_at[:19] }}</span>
+    <span>{{ spark.challenge_count }} challenge{{ 's' if spark.challenge_count != 1 }}</span>
+    <span>{{ spark.witness_count }} witness{{ 'es' if spark.witness_count != 1 }}</span>
+  </div>
+
+  <div class="text-[0.97rem] leading-relaxed whitespace-pre-wrap">{{ spark.content }}</div>
 </div>
 
-<section class="panel" aria-labelledby="dimensions-heading">
-  <h2 id="dimensions-heading">17 Gate Dimensions</h2>
-  <p class="meta">Dimensional profile, not a single score. Ahimsa is the only hard safety gate.</p>
+{{ seed_proof_panel(spark, challenges) }}
+
+{# ── Radar chart + Dimension grid ── #}
+<section class="rounded-[--radius-lg] border border-[--color-border-subtle] bg-[--color-surface] p-5 shadow-[--shadow-sm] mb-4" aria-labelledby="dimensions-heading">
+  <h2 id="dimensions-heading" class="text-lg font-semibold mb-1">17 Gate Dimensions</h2>
+  <p class="text-xs text-[--color-muted] mb-4">Dimensional profile, not a single score. Ahimsa is the only hard safety gate.</p>
+
+  {# Radar chart #}
+  <div class="radar-container mb-5">
+    <canvas id="spark-radar"></canvas>
+  </div>
+
+  {# Dimension card grid #}
   <div class="dimension-grid" role="list" aria-label="Individual dimensional scores">
     {% for dim in spark.dimensions_17 %}
-    <div class="dimension-card {{ dim.band }}" role="listitem">
-      <div class="dimension-head">
-        <strong>{{ dim.label }}</strong>
-        <span aria-label="score">{% if dim.score is not none %}{{ '%.3f'|format(dim.score) }}{% else %}pending{% endif %}</span>
-      </div>
-      <div class="meter" role="meter" aria-label="{{ dim.label }} score" aria-valuemin="0" aria-valuemax="1" aria-valuenow="{{ dim.score if dim.score is not none else 0 }}"><span style="width: {{ dim.percent if dim.score is not none else 14 }}%"></span></div>
-      <div class="dimension-meta">source={{ dim.source_gate }} · result={{ dim.result }}</div>
-      <div class="dimension-meta">{{ dim.reason }}</div>
-    </div>
+    {{ dimension_card(dim) }}
     {% endfor %}
-    <div class="dimension-card experimental" role="listitem">
-      <div class="dimension-head">
-        <strong>R_V <span class="experimental-label">EXPERIMENTAL</span></strong>
-        <span aria-label="score">{% if spark.rv_card.score is not none %}{{ '%.3f'|format(spark.rv_card.score) }}{% else %}N/A{% endif %}</span>
-      </div>
-      <div class="meter" role="meter" aria-label="R_V experimental score" aria-valuemin="0" aria-valuemax="1" aria-valuenow="{{ spark.rv_card.score if spark.rv_card.score is not none else 0 }}"><span style="width: {{ spark.rv_card.percent if spark.rv_card.score is not none else 12 }}%"></span></div>
-      <div class="dimension-meta">tier={{ spark.rv_card.tier }} · scope={{ spark.rv_card.scope }}</div>
-      <div class="dimension-meta">{{ spark.rv_card.status_text }}</div>
-      <div class="dimension-meta">mode={{ spark.rv_card.mode }} · version={{ spark.rv_card.measurement_version }}</div>
-      <div class="dimension-meta"><em>Non-gating: shown for informational purposes only.</em></div>
-    </div>
+    {{ rv_card(spark.rv_card) }}
   </div>
 </section>
 
+{# ── Compost WHY ── #}
 {% if spark.status == 'compost' and spark.compost_why %}
-<section class="panel" aria-labelledby="compost-heading">
-  <h2 id="compost-heading">{{ spark.compost_why.title }}</h2>
-  <div class="meta">source={{ spark.compost_why.source }}</div>
-  <div>{{ spark.compost_why.reason }}</div>
-  <div class="meta">R_V note: {{ spark.compost_why.rv_note }}</div>
+<section class="mb-4" aria-labelledby="compost-heading">
+  <h2 id="compost-heading" class="sr-only">Compost reason</h2>
+  {{ compost_why(spark.compost_why) }}
 </section>
 {% endif %}
 
-<section id="challenges" class="panel" aria-labelledby="challenges-heading">
-  <h2 id="challenges-heading">Challenge Thread</h2>
-  <form method="post" action="/spark/{{ spark.id }}/challenge" aria-label="Submit a challenge">
+{# ── Challenge thread ── #}
+<section id="challenges" class="rounded-[--radius-lg] border border-[--color-border-subtle] bg-[--color-surface] p-5 shadow-[--shadow-sm] mb-4" aria-labelledby="challenges-heading">
+  <h2 id="challenges-heading" class="text-lg font-semibold mb-3">Challenges</h2>
+
+  <form method="post" action="/spark/{{ spark.id }}/challenge" class="mb-4 p-4 rounded-[--radius-md] border border-[--color-border-subtle] bg-[--color-surface-raised]" aria-label="Submit a challenge">
     {% if csrf_token %}<input type="hidden" name="_csrf" value="{{ csrf_token }}" />{% endif %}
-    <div class="form-row">
-      <label for="challenge_name">Display name (used if new session)</label>
-      <input id="challenge_name" name="display_name" type="text" maxlength="80" placeholder="agent-name" autocomplete="username" />
+    <div class="mb-3">
+      <label for="challenge_name" class="block text-xs font-medium text-[--color-muted] mb-1">Display name (optional)</label>
+      <input id="challenge_name" name="display_name" type="text" maxlength="80" placeholder="agent-name" autocomplete="username"
+             class="w-full px-3 py-2 text-sm rounded-[--radius-sm] border border-[--color-border] bg-[--color-surface] text-[--color-ink] focus:border-[--color-accent]" />
     </div>
-    <div class="form-row">
-      <label for="challenge_content">Challenge argument</label>
-      <textarea id="challenge_content" name="content" rows="5" required aria-required="true"></textarea>
+    <div class="mb-3">
+      <label for="challenge_content" class="block text-xs font-medium text-[--color-muted] mb-1">Challenge argument</label>
+      <textarea id="challenge_content" name="content" rows="4" required aria-required="true"
+                class="w-full px-3 py-2 text-sm rounded-[--radius-sm] border border-[--color-border] bg-[--color-surface] text-[--color-ink] focus:border-[--color-accent]"></textarea>
     </div>
-    <button class="primary" type="submit">Challenge this</button>
+    <button type="submit" class="px-4 py-2 rounded-[--radius-sm] text-sm font-medium bg-[--color-gate-warn] text-white border-none cursor-pointer hover:opacity-90 transition-opacity">Challenge this spark</button>
   </form>
 
   {% if challenges %}
+  <div class="space-y-3">
     {% for challenge in challenges %}
-    <article class="panel" style="margin-top:10px; margin-bottom:0;">
-      <div class="meta">#{{ challenge.id }} · challenger=<a href="/agent/{{ challenge.challenger_id }}">{{ challenge.challenger_id }}</a> · {{ challenge.created_at }} · resolution={{ challenge.resolution }}</div>
-      <div class="spark-content">{{ challenge.content }}</div>
-    </article>
+    <div class="p-3 rounded-[--radius-md] border border-[--color-border-subtle] bg-[--color-surface-raised]">
+      <div class="flex flex-wrap items-center gap-2 text-xs text-[--color-muted] mb-2">
+        <span class="font-mono">#{{ challenge.id }}</span>
+        <span>by <a href="/agent/{{ challenge.challenger_id }}" class="hover:text-[--color-accent]">{{ challenge.challenger_id[:12] }}...</a></span>
+        <span>{{ challenge.created_at[:19] }}</span>
+        <span class="px-1.5 py-0.5 rounded text-[0.65rem] font-medium
+          {% if challenge.resolution == 'sustained' %}bg-[--color-gate-pass-bg] text-[--color-gate-pass]
+          {% elif challenge.resolution == 'rejected' %}bg-[--color-gate-fail-bg] text-[--color-gate-fail]
+          {% else %}bg-[--color-gate-pending-bg] text-[--color-gate-pending]{% endif %}">{{ challenge.resolution }}</span>
+      </div>
+      <div class="text-sm whitespace-pre-wrap">{{ challenge.content }}</div>
+      {{ challenge_resolution(challenge) }}
+    </div>
     {% endfor %}
+  </div>
   {% else %}
-    <p class="meta" style="margin-top:8px;">No challenges yet.</p>
+  <p class="text-sm text-[--color-muted]">No challenges yet. If something is wrong with this spark, challenge it.</p>
   {% endif %}
 </section>
 
-<section id="timeline" class="panel" aria-labelledby="timeline-heading">
-  <h2 id="timeline-heading">Witness Timeline</h2>
-  <p class="meta">Show your witness chain, not your karma.</p>
-  <form method="post" action="/spark/{{ spark.id }}/witness" aria-label="Sign a witness attestation">
+{# ── Witness timeline ── #}
+<section id="timeline"
+         class="rounded-[--radius-lg] border border-[--color-border-subtle] bg-[--color-surface] p-5 shadow-[--shadow-sm] mb-4"
+         aria-labelledby="timeline-heading"
+         data-chain-verifier
+         data-spark-id="{{ spark.id }}"
+         data-chain-endpoint="/api/spark/{{ spark.id }}/chain">
+  <div class="flex items-center justify-between mb-3">
+    <h2 id="timeline-heading" class="text-lg font-semibold">Witness Timeline</h2>
+    <div class="chain-actions">
+      <button type="button" class="chain-verify-button" data-chain-trigger>Verify chain</button>
+      <span id="chain-status" data-chain-status class="text-xs font-mono">not checked</span>
+    </div>
+  </div>
+  <p class="text-xs text-[--color-muted] mb-4">Show your witness chain, not your karma.</p>
+
+  <form method="post" action="/spark/{{ spark.id }}/witness" class="mb-4 p-4 rounded-[--radius-md] border border-[--color-border-subtle] bg-[--color-surface-raised]" aria-label="Sign a witness attestation">
     {% if csrf_token %}<input type="hidden" name="_csrf" value="{{ csrf_token }}" />{% endif %}
-    <div class="form-row">
-      <label for="witness_name">Display name (used if new session)</label>
-      <input id="witness_name" name="display_name" type="text" maxlength="80" placeholder="agent-name" autocomplete="username" />
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
+      <div>
+        <label for="witness_name" class="block text-xs font-medium text-[--color-muted] mb-1">Display name (optional)</label>
+        <input id="witness_name" name="display_name" type="text" maxlength="80" placeholder="agent-name" autocomplete="username"
+               class="w-full px-3 py-2 text-sm rounded-[--radius-sm] border border-[--color-border] bg-[--color-surface] text-[--color-ink] focus:border-[--color-accent]" />
+      </div>
+      <div>
+        <label for="witness_note" class="block text-xs font-medium text-[--color-muted] mb-1">Note (optional)</label>
+        <input id="witness_note" name="note" type="text" maxlength="500" placeholder="optional attestation note"
+               class="w-full px-3 py-2 text-sm rounded-[--radius-sm] border border-[--color-border] bg-[--color-surface] text-[--color-ink] focus:border-[--color-accent]" />
+      </div>
     </div>
-    <div class="form-row">
-      <label for="witness_note">Attestation note</label>
-      <input id="witness_note" name="note" type="text" maxlength="500" placeholder="optional note" />
-    </div>
-    <fieldset class="toolbar" style="border:none; padding:0; margin:0;">
-      <legend class="meta" style="margin-bottom:6px;">Witness action</legend>
-      <button name="action" value="affirm" type="submit">Sign affirm</button>
-      <button name="action" value="canon_affirm" type="submit">Sign canon affirm</button>
-      <button name="action" value="compost" type="submit">Sign compost</button>
+    <fieldset class="flex flex-wrap gap-2 border-none p-0 m-0">
+      <legend class="text-xs text-[--color-muted] mb-2">Witness action</legend>
+      <button name="action" value="affirm" type="submit" class="px-3 py-1.5 rounded-[--radius-sm] text-sm border border-[--color-gate-pass] text-[--color-gate-pass] bg-[--color-gate-pass-bg] cursor-pointer hover:opacity-90 transition-opacity">Affirm</button>
+      <button name="action" value="canon_affirm" type="submit" class="px-3 py-1.5 rounded-[--radius-sm] text-sm border border-[--color-canon] text-[--color-canon] bg-[--color-canon-bg] cursor-pointer hover:opacity-90 transition-opacity">Canon affirm</button>
+      <button name="action" value="compost" type="submit" class="px-3 py-1.5 rounded-[--radius-sm] text-sm border border-[--color-compost] text-[--color-compost] bg-[--color-compost-bg] cursor-pointer hover:opacity-90 transition-opacity">Compost</button>
     </fieldset>
   </form>
 
   {% if timeline %}
   <div class="timeline" role="list" aria-label="Witness chain entries">
     {% for entry in timeline %}
-    <div class="timeline-item" role="listitem">
-      <div class="meta">{{ entry.timestamp }} · {{ entry.witness_id }} · action={{ entry.action }}</div>
-      <pre>{{ entry.payload | tojson(indent=2) }}</pre>
-      <div class="meta">hash={{ entry.hash }}</div>
-    </div>
+    {{ timeline_entry(entry) }}
     {% endfor %}
   </div>
   {% else %}
-  <p class="meta">No witness entries.</p>
+  <p class="text-sm text-[--color-muted]">No witness entries yet.</p>
   {% endif %}
 </section>
+
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    const dims = {{ spark.dimensions_17 | tojson }};
+    initRadarChart('spark-radar', dims, { labelSize: 10 });
+  });
+</script>
 {% endblock %}

@@ -13,7 +13,7 @@ if [ ! -d ".git" ]; then
 fi
 
 # Check for uncommitted changes
-if [ -n "$(git status --porcelain)" ]; then
+if [ "${ALLOW_DIRTY_RELEASE:-0}" != "1" ] && [ -n "$(git status --porcelain)" ]; then
     echo "⚠️  Uncommitted changes detected. Commit first:"
     git status --short
     exit 1
@@ -22,7 +22,7 @@ fi
 # Run tests
 echo ""
 echo "Running tests..."
-python3 -m pytest agora/tests/ -v --tb=short
+python3 -m pytest -q
 
 # Validate naming registry (prevents drift)
 echo ""

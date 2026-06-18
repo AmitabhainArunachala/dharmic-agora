@@ -1,0 +1,19 @@
+{
+  "claim_id": "claim-a04-agentic-immune-system-internal-proof-20260512-v1",
+  "confidence": 0.72,
+  "created_at": "2026-05-12T14:17:20.427819+00:00",
+  "evidence_required_to_upgrade": [
+    "A red-team memo with failure modes",
+    "A rejected or narrowed claim captured in the record",
+    "A next test created from the strongest objection"
+  ],
+  "next_test": "Force the claim through one hostile reading and incorporate a narrowing correction.",
+  "protected_value": "anti-slop",
+  "role": "adversarial",
+  "stance": "challenge",
+  "strongest_affirmation": "The claim is stronger when it survives direct pressure against inflation and circular evidence.",
+  "strongest_objection": "The system may be rewarding its own language instead of contact with reality.",
+  "what_would_make_this_false": "The claim fails if it depends on self-approval, vague witness records, or unsupported superiority claims.",
+  "witness_id": "mandala-claim-a04-agentic-immune-system-internal-proof-20260512-v1-adversarial",
+  "witness_ref": "nodes/anchors/anchor-04-complex-systems-cybernetics/claims/witness_mandala/claim-a04-agentic-immune-system-internal-proof-20260512-v1-adversarial.json"
+}

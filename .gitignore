@@ -71,6 +71,8 @@ htmlcov/
 
 # Data
 data/
+!site/data/
+!site/data/seed_claims.json
 
 # P9 mesh artifacts (generated locally; never commit)
 p9_mesh/orphan_bundles/

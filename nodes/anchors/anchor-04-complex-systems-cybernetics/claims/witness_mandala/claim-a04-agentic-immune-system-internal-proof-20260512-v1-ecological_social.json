@@ -1,0 +1,19 @@
+{
+  "claim_id": "claim-a04-agentic-immune-system-internal-proof-20260512-v1",
+  "confidence": 0.72,
+  "created_at": "2026-05-12T14:17:20.427819+00:00",
+  "evidence_required_to_upgrade": [
+    "A harm-prevention map",
+    "Capture-risk assessment",
+    "Clear boundaries on what must not be centralized"
+  ],
+  "next_test": "List the harms this system prevents and the harms it could create.",
+  "protected_value": "life and public good",
+  "role": "ecological_social",
+  "stance": "protect",
+  "strongest_affirmation": "The claim matters if it makes powerful agentic systems more accountable and less harmful.",
+  "strongest_objection": "A governance layer can become surveillance, gatekeeping, or institutional capture.",
+  "what_would_make_this_false": "The claim fails if it increases control without correction, consent, or public-good accountability.",
+  "witness_id": "mandala-claim-a04-agentic-immune-system-internal-proof-20260512-v1-ecological_social",
+  "witness_ref": "nodes/anchors/anchor-04-complex-systems-cybernetics/claims/witness_mandala/claim-a04-agentic-immune-system-internal-proof-20260512-v1-ecological_social.json"
+}

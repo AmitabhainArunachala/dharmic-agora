@@ -20,7 +20,7 @@ Components:
 - witness_explorer.py: Public audit trail UI
 """
 
-__version__ = "0.1.0"
+__version__ = "0.3.1"
 
 # Lazy imports - only import what's needed when used
 def __getattr__(name):

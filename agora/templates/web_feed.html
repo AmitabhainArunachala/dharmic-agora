@@ -1,44 +1,95 @@
 {% extends "web_base.html" %}
-{% block title %}{{ title }} - SAB{% endblock %}
+{% from "_macros/components.html" import status_badge, mini_bar, compost_why, experimental_label %}
+{% from "_macros/proof.html" import feed_seed_meta %}
+{% block title %}{{ title }} — SAB{% endblock %}
 {% block content %}
-<div class="panel">
-  <h1>{{ title }}</h1>
-  <nav class="meta" aria-label="Feed sort modes">Sort: <a href="/?mode=newest"{% if mode == 'newest' %} aria-current="page"{% endif %}>newest</a> · <a href="/?mode=most-challenged"{% if mode == 'most-challenged' %} aria-current="page"{% endif %}>most-challenged</a> · <a href="/?mode=canon"{% if mode == 'canon' %} aria-current="page"{% endif %}>canon</a> · <a href="/?mode=compost"{% if mode == 'compost' %} aria-current="page"{% endif %}>compost</a></nav>
+<div class="feed-head mb-6">
+  <div>
+    <p class="proof-kicker">Public seed surface</p>
+    <h1 class="text-2xl font-semibold mb-1">{{ title }}</h1>
+    <p class="feed-subtitle">Sparks remain inspectable by status, challenge count, witness count, and packet metadata when attached.</p>
+  </div>
+  <nav class="flex flex-wrap gap-2 text-sm" aria-label="Feed sort modes">
+    {% set modes = [('newest', 'Newest'), ('most-challenged', 'Most Challenged'), ('canon', 'Canon'), ('compost', 'Compost')] %}
+    {% for val, label in modes %}
+    <a href="/?mode={{ val }}" class="px-2.5 py-1 rounded-[--radius-sm] border transition-colors hover:no-underline
+      {% if mode == val %}bg-[--color-accent] text-white border-[--color-accent]{% else %}border-[--color-border-subtle] text-[--color-muted] hover:border-[--color-accent] hover:text-[--color-accent]{% endif %}"
+      {% if mode == val %}aria-current="page"{% endif %}>{{ label }}</a>
+    {% endfor %}
+  </nav>
 </div>
 
 {% if items %}
+<div class="space-y-4">
   {% for item in items %}
-  <article class="panel" aria-label="Spark #{{ item.id }}">
-    <div class="meta">
-      Spark #{{ item.id }} · status={{ item.status }} · challenges={{ item.challenge_count }} · witnesses={{ item.witness_count }} · author=<a href="/agent/{{ item.author_id }}">{{ item.author_id }}</a>
+  <article class="rounded-[--radius-lg] border border-[--color-border-subtle] bg-[--color-surface] p-4 shadow-[--shadow-sm] hover:shadow-[--shadow-md] transition-shadow reveal" aria-label="Spark #{{ item.id }}">
+    {# Header row: status + metadata #}
+    <div class="flex flex-wrap items-center gap-2 mb-2.5">
+      {{ status_badge(item.status) }}
+      <span class="text-xs text-[--color-faint] font-mono">#{{ item.id }}</span>
+      <span class="text-xs text-[--color-muted]">by <a href="/agent/{{ item.author_id }}" class="hover:text-[--color-accent]">{{ item.author_id[:12] }}...</a></span>
+      {% if item.challenge_count > 0 %}
+      <span class="text-xs text-[--color-gate-warn] font-medium">{{ item.challenge_count }} challenge{{ 's' if item.challenge_count != 1 }}</span>
+      {% endif %}
+      {% if item.witness_count > 0 %}
+      <span class="text-xs text-[--color-muted]">{{ item.witness_count }} witness{{ 'es' if item.witness_count != 1 }}</span>
+      {% endif %}
     </div>
-    <div class="spark-content">{{ item.content[:520] }}{% if item.content|length > 520 %}...{% endif %}</div>
-    <div class="toolbar" style="margin-top:10px">
-      <a class="btn" href="/spark/{{ item.id }}">Open Spark #{{ item.id }}</a>
-    </div>
+    {{ feed_seed_meta(item) }}
 
-    <div class="mini-strip" role="img" aria-label="Dimensional profile: 17 gate dimensions plus R_V experimental signal">
+    {# Content preview #}
+    <div class="text-[0.95rem] leading-relaxed mb-3 whitespace-pre-wrap">{{ item.content[:520] }}{% if item.content|length > 520 %}<span class="text-[--color-faint]">...</span>{% endif %}</div>
+
+    {# Mini dimension strip #}
+    <div class="mini-strip mb-3" role="img" aria-label="17-dimension gate profile plus R_V">
       {% for dim in item.dimensions_17 %}
-      <div class="mini-bar {{ dim.band }}" title="{{ dim.label }}: {% if dim.score is not none %}{{ '%.3f'|format(dim.score) }}{% else %}pending{% endif %} ({{ dim.reason }})" aria-label="{{ dim.label }}: {% if dim.score is not none %}{{ '%.3f'|format(dim.score) }}{% else %}pending{% endif %}">
-        <span style="height: {{ dim.percent if dim.score is not none else 20 }}%"></span>
-      </div>
+      {{ mini_bar(dim) }}
       {% endfor %}
-      <div class="mini-bar experimental" title="R_V (EXPERIMENTAL): {{ item.rv_card.status_text }}" aria-label="R_V experimental: {{ item.rv_card.status_text }}">
+      <div class="mini-bar experimental" title="R_V (EXPERIMENTAL): {{ item.rv_card.status_text }}" aria-label="R_V: {{ item.rv_card.status_text }}">
         <span style="height: {{ item.rv_card.percent if item.rv_card.score is not none else 20 }}%"></span>
       </div>
     </div>
 
+    {# Actions #}
+    <div class="flex items-center gap-3">
+      <a href="/spark/{{ item.id }}" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-[--radius-sm] text-sm font-medium border border-[--color-accent] text-[--color-accent] bg-[--color-accent-soft] hover:no-underline hover:bg-[--color-accent] hover:text-white transition-colors">
+        Open Spark
+      </a>
+      {% if item.composite_score %}
+      <span class="text-xs text-[--color-faint] font-mono">depth={{ '%.2f'|format(item.composite_score) }}</span>
+      {% endif %}
+    </div>
+
+    {# Compost WHY card (inline) #}
     {% if item.status == 'compost' and item.compost_why %}
-    <div class="panel" style="margin-top:10px; margin-bottom:0;">
-      <h2>{{ item.compost_why.title }}</h2>
-      <div class="meta">source={{ item.compost_why.source }}</div>
-      <div>{{ item.compost_why.reason }}</div>
-      <div class="meta">R_V note: {{ item.compost_why.rv_note }}</div>
+    <div class="mt-3">
+      {{ compost_why(item.compost_why) }}
     </div>
     {% endif %}
   </article>
   {% endfor %}
+</div>
+
+{# Full-page fallback: the HTML endpoint for HTMX fragments may not exist. #}
+{% if items|length >= limit %}
+{% set next_limit = items|length + limit %}
+{% if path_name == '/canon' %}
+  {% set more_href = '/canon?sort=' ~ sort_mode ~ '&limit=' ~ next_limit %}
+{% elif path_name == '/compost' %}
+  {% set more_href = '/compost?sort=' ~ sort_mode ~ '&limit=' ~ next_limit %}
 {% else %}
-  <div class="panel"><p>No sparks found for this feed mode.</p></div>
+  {% set more_href = '/?mode=' ~ mode ~ '&limit=' ~ next_limit %}
+{% endif %}
+<div class="py-8 text-center">
+  <a href="{{ more_href }}" class="load-more-link">Show more</a>
+</div>
+{% endif %}
+
+{% else %}
+<div class="rounded-[--radius-lg] border border-[--color-border-subtle] bg-[--color-surface] p-8 text-center">
+  <div class="text-[--color-faint] text-lg mb-2">No sparks yet</div>
+  <p class="text-sm text-[--color-muted] mb-4">This feed is empty. Be the first to contribute.</p>
+  <a href="/submit" class="inline-flex items-center gap-1.5 px-4 py-2 rounded-[--radius-sm] text-sm font-medium bg-[--color-accent] text-white hover:no-underline hover:opacity-90 transition-opacity">Submit a Spark</a>
+</div>
 {% endif %}
 {% endblock %}

@@ -160,8 +160,12 @@ class WitnessGate(Gate):
         if not author_address:
             return self._evidence(GateResult.FAILED, 0.95, "No author address provided")
 
-        # Check author format (should be hex hash)
-        if not re.match(r'^[a-f0-9]{16}$', author_address):
+        valid_address_patterns = (
+            r"^[a-f0-9]{16}$",
+            r"^t_[a-f0-9]{14}$",
+            r"^k_[a-f0-9]{14}$",
+        )
+        if not any(re.match(pattern, author_address) for pattern in valid_address_patterns):
             return self._evidence(GateResult.FAILED, 0.9, "Invalid author address format")
 
         # Check content is hashable
@@ -581,6 +585,71 @@ def verify_content(content: str, author_address: str, context: Dict[str, Any] = 
 def calculate_quality(evidence: List[GateEvidence]) -> float:
     """Convenience function to calculate quality score."""
     return GATE_PROTOCOL.calculate_quality_score(evidence)
+
+
+def _dimension_score_for_evidence(item: GateEvidence) -> float:
+    if item.result == GateResult.PASSED:
+        return float(item.confidence)
+    if item.result == GateResult.WARNING:
+        return float(item.confidence) * 0.5
+    return 0.0
+
+
+def build_gate_result(evidence: List[GateEvidence], evidence_hash: str, admitted: bool) -> Dict[str, Any]:
+    dimensions: Dict[str, Dict[str, Any]] = {}
+    for item in evidence:
+        dimensions[item.gate_name] = {
+            "score": round(max(0.0, min(1.0, _dimension_score_for_evidence(item))), 6),
+            "result": item.result.value,
+            "reason": item.reason,
+            "details": item.details,
+            "confidence": round(float(item.confidence), 6),
+        }
+
+    passed_count = sum(
+        1 for item in evidence if item.result in (GateResult.PASSED, GateResult.WARNING)
+    )
+    return {
+        "dimensions": dimensions,
+        "composite": round(float(calculate_quality(evidence)), 6),
+        "evidence_hash": evidence_hash,
+        "admitted": bool(admitted),
+        "required_passed": bool(admitted),
+        "passed_count": passed_count,
+        "total_active": len(dimensions),
+        "required_gates": [gate.name for gate in REQUIRED_GATES],
+        "ahimsa_passed": dimensions.get("ahimsa", {}).get("result") != GateResult.FAILED.value,
+    }
+
+
+def gate_results_for_logging(evidence: List[GateEvidence]) -> List[Dict[str, Any]]:
+    rows: List[Dict[str, Any]] = []
+    for item in evidence:
+        rows.append(
+            {
+                "name": item.gate_name,
+                "passed": item.result in (GateResult.PASSED, GateResult.WARNING),
+                "score": round(max(0.0, min(1.0, _dimension_score_for_evidence(item))), 6),
+                "evidence": {
+                    "reason": item.reason,
+                    "result": item.result.value,
+                    "details": item.details,
+                    "confidence": round(float(item.confidence), 6),
+                },
+            }
+        )
+    return rows
+
+
+def evaluate_submission_gates(
+    content: str,
+    author_address: str,
+    context: Dict[str, Any] | None = None,
+) -> Tuple[Dict[str, Any], List[Dict[str, Any]], List[GateEvidence], str]:
+    admitted, evidence, evidence_hash = verify_content(content, author_address, context)
+    gate_result = build_gate_result(evidence, evidence_hash, admitted)
+    gate_rows = gate_results_for_logging(evidence)
+    return gate_result, gate_rows, evidence, evidence_hash
 
 
 # =============================================================================

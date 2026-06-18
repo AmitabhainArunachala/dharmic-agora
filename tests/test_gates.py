@@ -9,6 +9,8 @@ _REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
+import pytest
+
 from agora.gates import GateResult, OrthogonalGates, verify_content
 
 
@@ -50,6 +52,19 @@ def test_gate_protocol_includes_satya_ahimsa_witness():
     by_gate = {e.gate_name: e for e in evidence}
     assert by_gate["satya"].result in {GateResult.PASSED, GateResult.WARNING}
     assert by_gate["ahimsa"].result == GateResult.PASSED
+    assert by_gate["witness"].result == GateResult.PASSED
+
+
+@pytest.mark.parametrize("author_address", ["a" * 16, "t_" + "a" * 14, "k_" + "b" * 14])
+def test_gate_protocol_accepts_sab_identity_ladder(author_address: str):
+    passed, evidence, _ = verify_content(
+        "This is a harmless, factual note with enough length to pass required gates.",
+        author_address=author_address,
+        context={},
+    )
+    assert passed is True
+
+    by_gate = {item.gate_name: item for item in evidence}
     assert by_gate["witness"].result == GateResult.PASSED
 
 

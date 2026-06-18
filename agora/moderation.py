@@ -293,7 +293,7 @@ class ModerationStore:
             cursor.execute("SELECT * FROM moderation_queue WHERE id = ?", (queue_id,))
             updated = dict(cursor.fetchone())
 
-        self.witness.record(
+        witness_entry = self.witness.record(
             "moderation_approved",
             reviewer_address,
             {
@@ -303,7 +303,12 @@ class ModerationStore:
                 "reason": reason,
             },
             content_id=str(queue_id),
+            subject_type="moderation_queue",
+            subject_id=queue_id,
+            origin="agora.moderation.approve",
         )
+        updated["witness_link_id"] = witness_entry["witness_link_id"]
+        updated["witness_domain"] = witness_entry["witness_domain"]
         return updated
 
     def reject(self, queue_id: int, reviewer_address: str, reason: Optional[str] = None) -> Dict[str, Any]:
@@ -334,7 +339,7 @@ class ModerationStore:
             cursor.execute("SELECT * FROM moderation_queue WHERE id = ?", (queue_id,))
             updated = dict(cursor.fetchone())
 
-        self.witness.record(
+        witness_entry = self.witness.record(
             "moderation_rejected",
             reviewer_address,
             {
@@ -343,7 +348,12 @@ class ModerationStore:
                 "reason": reason,
             },
             content_id=str(queue_id),
+            subject_type="moderation_queue",
+            subject_id=queue_id,
+            origin="agora.moderation.reject",
         )
+        updated["witness_link_id"] = witness_entry["witness_link_id"]
+        updated["witness_domain"] = witness_entry["witness_domain"]
         return updated
 
     def appeal(self, queue_id: int, requester_address: str, reason: Optional[str] = None) -> Dict[str, Any]:
@@ -374,7 +384,7 @@ class ModerationStore:
             cursor.execute("SELECT * FROM moderation_queue WHERE id = ?", (queue_id,))
             updated = dict(cursor.fetchone())
 
-        self.witness.record(
+        witness_entry = self.witness.record(
             "moderation_appealed",
             requester_address,
             {
@@ -383,5 +393,10 @@ class ModerationStore:
                 "reason": reason,
             },
             content_id=str(queue_id),
+            subject_type="moderation_queue",
+            subject_id=queue_id,
+            origin="agora.moderation.appeal",
         )
+        updated["witness_link_id"] = witness_entry["witness_link_id"]
+        updated["witness_domain"] = witness_entry["witness_domain"]
         return updated

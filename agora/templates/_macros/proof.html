@@ -1,0 +1,128 @@
+{# Dense proof-state components for seed-facing public pages. #}
+
+{% macro proof_value(value, fallback="pending") -%}
+  {%- if value is defined and value -%}
+    {{ value }}
+  {%- else -%}
+    <span class="proof-pending">{{ fallback }}</span>
+  {%- endif -%}
+{%- endmacro %}
+
+{% macro proof_chip(label, value, fallback="pending", tone="neutral") -%}
+<span class="proof-chip proof-chip-{{ tone }}">
+  <span class="proof-chip-label">{{ label }}</span>
+  <span class="proof-chip-value">{{ proof_value(value, fallback) }}</span>
+</span>
+{%- endmacro %}
+
+{% macro ref_list(refs, fallback="not linked") -%}
+  {%- if refs is defined and refs -%}
+    {%- if refs is string -%}
+      <code>{{ refs }}</code>
+    {%- else -%}
+      <span class="proof-ref-list">
+      {%- for ref in refs -%}
+        {%- set label = ref.label if ref.label is defined and ref.label else ref.path if ref.path is defined and ref.path else ref.ref if ref.ref is defined and ref.ref else ref.id if ref.id is defined and ref.id else ref -%}
+        {%- set href = ref.href if ref.href is defined and ref.href else ref.url if ref.url is defined and ref.url else "" -%}
+        {%- if href -%}
+          <a href="{{ href }}" class="proof-ref">{{ label }}</a>
+        {%- else -%}
+          <code class="proof-ref">{{ label }}</code>
+        {%- endif -%}
+      {%- endfor -%}
+      </span>
+    {%- endif -%}
+  {%- else -%}
+    <span class="proof-pending">{{ fallback }}</span>
+  {%- endif -%}
+{%- endmacro %}
+
+{% macro resolution_badge(resolution) -%}
+  {%- set state = resolution if resolution is defined and resolution else "pending" -%}
+  {%- set tone = "pass" if state in ["resolved", "sublated", "accepted", "rejected", "sustained"] else "pending" -%}
+  <span class="proof-resolution-badge proof-resolution-{{ tone }}">{{ state }}</span>
+{%- endmacro %}
+
+{% macro seed_proof_panel(spark, challenges) -%}
+  {%- set node_coordinate = spark.node_coordinate if spark.node_coordinate is defined and spark.node_coordinate else spark.node if spark.node is defined and spark.node else spark.anchor_coordinate if spark.anchor_coordinate is defined and spark.anchor_coordinate else none -%}
+  {%- set claim_refs = spark.claim_packet_refs if spark.claim_packet_refs is defined and spark.claim_packet_refs else spark.claim_packet_ref if spark.claim_packet_ref is defined and spark.claim_packet_ref else spark.claim_ref if spark.claim_ref is defined and spark.claim_ref else none -%}
+  {%- set artifact_refs = spark.artifact_refs if spark.artifact_refs is defined and spark.artifact_refs else spark.artifacts if spark.artifacts is defined and spark.artifacts else none -%}
+  {%- set lineage_root = spark.lineage_root_id if spark.lineage_root_id is defined and spark.lineage_root_id else spark.root_spark_id if spark.root_spark_id is defined and spark.root_spark_id else none -%}
+  {%- set parent_spark = spark.parent_spark_id if spark.parent_spark_id is defined and spark.parent_spark_id else spark.predecessor_spark_id if spark.predecessor_spark_id is defined and spark.predecessor_spark_id else none -%}
+  {%- set sublation_status = spark.sublation_status if spark.sublation_status is defined and spark.sublation_status else spark.correction_status if spark.correction_status is defined and spark.correction_status else none -%}
+  {%- set challenge_total = challenges|length if challenges is defined and challenges else 0 -%}
+  {%- set pending_total = challenges|selectattr("resolution", "equalto", "pending")|list|length if challenges is defined and challenges else 0 -%}
+
+<section class="proof-panel" aria-labelledby="proof-heading">
+  <div class="proof-panel-head">
+    <div>
+      <p class="proof-kicker">Seed proof state</p>
+      <h2 id="proof-heading">Coordinate, packets, and attack surface</h2>
+    </div>
+    <div class="proof-chip-row">
+      {{ proof_chip("node", node_coordinate, "unbound") }}
+      {{ proof_chip("claims", claim_refs|length if claim_refs is defined and claim_refs and claim_refs is not string else claim_refs, "none") }}
+      {{ proof_chip("open attacks", pending_total, "0", "warn" if pending_total else "neutral") }}
+    </div>
+  </div>
+
+  <div class="proof-grid">
+    <div class="proof-card">
+      <div class="proof-card-label">Node Coordinate</div>
+      <div class="proof-card-value">{{ proof_value(node_coordinate, "unbound") }}</div>
+      <div class="proof-card-note">Anchor, node, or lattice coordinate supplied by the claim bridge.</div>
+    </div>
+    <div class="proof-card">
+      <div class="proof-card-label">Claim Packet Refs</div>
+      <div class="proof-card-value">{{ ref_list(claim_refs) }}</div>
+      <div class="proof-card-note">Packet refs stay read-only on the public surface.</div>
+    </div>
+    <div class="proof-card">
+      <div class="proof-card-label">Correction / Sublation</div>
+      <div class="proof-card-value">{{ proof_value(sublation_status, "pending") }}</div>
+      <div class="proof-card-note">A resolved attack should preserve the attack and link the correction.</div>
+    </div>
+    <div class="proof-card">
+      <div class="proof-card-label">Lineage</div>
+      <div class="proof-card-value">
+        root={{ proof_value(lineage_root, "self") }}
+        <span class="proof-separator">/</span>
+        parent={{ proof_value(parent_spark, "none") }}
+      </div>
+      <div class="proof-card-note">Used by canon and replay routes when available.</div>
+    </div>
+    <div class="proof-card proof-card-wide">
+      <div class="proof-card-label">Artifact Refs</div>
+      <div class="proof-card-value">{{ ref_list(artifact_refs, "none") }}</div>
+    </div>
+    <div class="proof-card">
+      <div class="proof-card-label">Attack Ledger</div>
+      <div class="proof-card-value">{{ challenge_total }} total / {{ pending_total }} open</div>
+    </div>
+  </div>
+</section>
+{%- endmacro %}
+
+{% macro feed_seed_meta(item) -%}
+  {%- set node_coordinate = item.node_coordinate if item.node_coordinate is defined and item.node_coordinate else item.node if item.node is defined and item.node else none -%}
+  {%- set claim_ref = item.claim_packet_ref if item.claim_packet_ref is defined and item.claim_packet_ref else item.claim_ref if item.claim_ref is defined and item.claim_ref else none -%}
+  {%- set sublation_status = item.sublation_status if item.sublation_status is defined and item.sublation_status else item.correction_status if item.correction_status is defined and item.correction_status else none -%}
+  {%- if node_coordinate or claim_ref or sublation_status -%}
+  <div class="feed-proof-row" aria-label="Seed proof metadata">
+    {%- if node_coordinate -%}{{ proof_chip("node", node_coordinate) }}{%- endif -%}
+    {%- if claim_ref -%}{{ proof_chip("claim", claim_ref) }}{%- endif -%}
+    {%- if sublation_status -%}{{ proof_chip("sublation", sublation_status) }}{%- endif -%}
+  </div>
+  {%- endif -%}
+{%- endmacro %}
+
+{% macro challenge_resolution(challenge) -%}
+  {%- set correction_ref = challenge.correction_artifact if challenge.correction_artifact is defined and challenge.correction_artifact else challenge.correction_ref if challenge.correction_ref is defined and challenge.correction_ref else challenge.correction_id if challenge.correction_id is defined and challenge.correction_id else challenge.corrected_by if challenge.corrected_by is defined and challenge.corrected_by else none -%}
+  {%- set sublation_ref = challenge.sublation_witness_hash if challenge.sublation_witness_hash is defined and challenge.sublation_witness_hash else challenge.sublation_ref if challenge.sublation_ref is defined and challenge.sublation_ref else challenge.sublation_id if challenge.sublation_id is defined and challenge.sublation_id else none -%}
+  {%- set sublation_status = "sublated" if challenge.successor_spark_id is defined and challenge.successor_spark_id else challenge.sublation_status if challenge.sublation_status is defined and challenge.sublation_status else "pending" -%}
+<div class="challenge-proof">
+  <span>resolution {{ resolution_badge(challenge.resolution) }}</span>
+  <span>correction {{ proof_value(correction_ref, "pending") }}</span>
+  <span>sublation {{ proof_value(sublation_ref if sublation_ref else sublation_status, "pending") }}</span>
+</div>
+{%- endmacro %}

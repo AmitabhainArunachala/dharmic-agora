@@ -16,7 +16,7 @@ SAB_VERSION = os.environ.get("SAB_VERSION", "0.3.1")
 
 
 def get_db_path() -> Path:
-    raw = os.environ.get("SAB_DB_PATH")
+    raw = os.environ.get("SAB_AUTHORITY_DB_PATH") or os.environ.get("SAB_DB_PATH")
     return Path(raw) if raw else DEFAULT_DB_PATH
 
 

@@ -53,6 +53,48 @@ def test_scaffold_claim_packet_auto_claim_id_when_omitted() -> None:
     assert payload["claim_path"].endswith(f"{claim_id}.json")
 
 
+def test_scaffold_claim_packet_can_add_witness_mandala() -> None:
+    cmd = [
+        sys.executable,
+        "scripts/scaffold_claim_packet.py",
+        "--node",
+        "anchor-03-ml-intelligence-engineering",
+        "--claim-id",
+        "claim-test-mandala-dry-run-v1",
+        "--title",
+        "Mandala dry run claim",
+        "--stage",
+        "venture_proposal",
+        "--witness-mandala",
+        "--dry-run",
+    ]
+    proc = subprocess.run(cmd, cwd=REPO_ROOT, capture_output=True, text=True, check=False)
+    assert proc.returncode == 0, proc.stderr
+    payload = json.loads(proc.stdout.strip())
+    assert payload["status"] == "ok"
+    assert payload["witness_mandala_required"] is True
+    assert payload["lane"] == "venture"
+
+
+def test_scaffold_claim_packet_rejects_unknown_lane() -> None:
+    cmd = [
+        sys.executable,
+        "scripts/scaffold_claim_packet.py",
+        "--node",
+        "anchor-03-ml-intelligence-engineering",
+        "--claim-id",
+        "claim-test-invalid-lane-v1",
+        "--title",
+        "Invalid lane claim",
+        "--lane",
+        "kitchen",
+        "--dry-run",
+    ]
+    proc = subprocess.run(cmd, cwd=REPO_ROOT, capture_output=True, text=True, check=False)
+    assert proc.returncode != 0
+    assert "lane must preserve the node lane model" in (proc.stdout + proc.stderr)
+
+
 def test_scaffold_claim_packet_rejects_adjacent_cross_node() -> None:
     cmd = [
         sys.executable,

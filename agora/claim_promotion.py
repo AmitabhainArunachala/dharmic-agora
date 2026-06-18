@@ -55,7 +55,9 @@ def discover_claim_files(nodes_root: Path) -> List[Path]:
     files = [
         p
         for p in sorted(nodes_root.rglob("*.json"))
-        if "claims" in p.parts and p.is_file()
+        if p.is_file()
+        and p.parent.name == "claims"
+        and p.parent.parent.name.startswith("anchor-")
     ]
     return files
 
@@ -175,4 +177,3 @@ def run_promotion_enforcement(
         warnings=warnings,
         evaluations=evaluations,
     )
-

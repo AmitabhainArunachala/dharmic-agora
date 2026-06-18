@@ -27,9 +27,22 @@ from agora.node_governance import (  # noqa: E402
     STAGE_PAPER_INTERNAL,
     STAGE_VENTURE_EXTERNAL,
     STAGE_VENTURE_PROPOSAL,
+    WITNESS_MANDALA_REQUIRED_ROLES,
     load_non_adjacent_pairs,
 )
 from agora.node_coordinates import resolve_node_coordinate  # noqa: E402
+
+NODE_LANES = (
+    "dialogue",
+    "papers",
+    "code",
+    "site",
+    "venture",
+    "claims",
+    "witness",
+    "runs",
+    "artifacts",
+)
 
 
 def _iso(dt: datetime) -> str:
@@ -75,6 +88,15 @@ def _default_lane_for_stage(stage: str) -> str:
     if stage in (STAGE_VENTURE_PROPOSAL, STAGE_VENTURE_EXTERNAL):
         return "venture"
     return "papers"
+
+
+def _resolve_lane(stage: str, lane_override: str) -> str:
+    lane = lane_override.strip() if lane_override.strip() else _default_lane_for_stage(stage)
+    if lane not in NODE_LANES:
+        raise ValueError(
+            f"lane must preserve the node lane model ({', '.join(NODE_LANES)}); got {lane!r}"
+        )
+    return lane
 
 
 def _resolve_cross_nodes(node_id: str, requested: List[str]) -> List[str]:
@@ -247,6 +269,121 @@ def _build_witness_packets(
     return refs
 
 
+def _default_mandala_seed(role: str, title: str, summary: str) -> Dict[str, Any]:
+    claim_name = title.strip() or "this claim"
+    claim_summary = summary.strip() or claim_name
+    seeds: Dict[str, Dict[str, Any]] = {
+        "formal": {
+            "stance": "clarify",
+            "strongest_affirmation": f"{claim_name} has a named claim packet, artifact references, and stage request.",
+            "strongest_objection": "The claim must define exactly what would count as evidence, success, and overreach.",
+            "what_would_make_this_false": "The claim fails if its key terms cannot be expressed as inspectable invariants or falsifiable conditions.",
+            "evidence_required_to_upgrade": [
+                "A short invariant list",
+                "Explicit failure conditions",
+                "A claim-tier map separating proven, partial, hypothesis, and vision",
+            ],
+            "protected_value": "precision",
+            "next_test": "Rewrite the claim as testable invariants before any stronger promotion.",
+        },
+        "engineering": {
+            "stance": "verify",
+            "strongest_affirmation": "The claim has concrete artifacts that can be inspected by code and validators.",
+            "strongest_objection": "A wired file path is not the same as a production runtime path.",
+            "what_would_make_this_false": "The claim fails if referenced code, tests, state stores, or command paths do not exist or cannot be rerun.",
+            "evidence_required_to_upgrade": [
+                "Passing scoped tests",
+                "Runtime entrypoint references",
+                "A replayable command that reproduces the artifact state",
+            ],
+            "protected_value": "operational truth",
+            "next_test": "Run the smallest deterministic proof command from a clean checkout.",
+        },
+        "adversarial": {
+            "stance": "challenge",
+            "strongest_affirmation": "The claim is stronger when it survives direct pressure against inflation and circular evidence.",
+            "strongest_objection": "The system may be rewarding its own language instead of contact with reality.",
+            "what_would_make_this_false": "The claim fails if it depends on self-approval, vague witness records, or unsupported superiority claims.",
+            "evidence_required_to_upgrade": [
+                "A red-team memo with failure modes",
+                "A rejected or narrowed claim captured in the record",
+                "A next test created from the strongest objection",
+            ],
+            "protected_value": "anti-slop",
+            "next_test": "Force the claim through one hostile reading and incorporate a narrowing correction.",
+        },
+        "economic": {
+            "stance": "price",
+            "strongest_affirmation": f"{claim_summary} may become valuable if it reduces risk, time, or uncertainty for a real buyer.",
+            "strongest_objection": "A coherent internal proof is not yet evidence of willingness to pay.",
+            "what_would_make_this_false": "The claim fails commercially if no buyer owns the pain or pays for the reduced risk.",
+            "evidence_required_to_upgrade": [
+                "A named buyer profile",
+                "A painful existing workflow",
+                "A willingness-to-pay interview or paid pilot signal",
+            ],
+            "protected_value": "non-extractive viability",
+            "next_test": "Identify one buyer and one narrow paid pilot question.",
+        },
+        "ecological_social": {
+            "stance": "protect",
+            "strongest_affirmation": "The claim matters if it makes powerful agentic systems more accountable and less harmful.",
+            "strongest_objection": "A governance layer can become surveillance, gatekeeping, or institutional capture.",
+            "what_would_make_this_false": "The claim fails if it increases control without correction, consent, or public-good accountability.",
+            "evidence_required_to_upgrade": [
+                "A harm-prevention map",
+                "Capture-risk assessment",
+                "Clear boundaries on what must not be centralized",
+            ],
+            "protected_value": "life and public good",
+            "next_test": "List the harms this system prevents and the harms it could create.",
+        },
+        "human_telos": {
+            "stance": "orient",
+            "strongest_affirmation": "The claim is meaningful only if it preserves purpose, human authority, and truthful memory.",
+            "strongest_objection": "The system can overload the founder if it asks the human to hold every boundary manually.",
+            "what_would_make_this_false": "The claim fails if it creates more cognitive burden, spiritual inflation, or vague authority.",
+            "evidence_required_to_upgrade": [
+                "Human boundary decisions",
+                "Red lines",
+                "A next question that genuinely requires human authority",
+            ],
+            "protected_value": "truth, consent, and telos",
+            "next_test": "Ask only the smallest human decision needed to advance the claim.",
+        },
+    }
+    return seeds[role]
+
+
+def _build_witness_mandala(
+    *,
+    claim_id: str,
+    claim_dir: Path,
+    title: str,
+    summary: str,
+    force: bool,
+    dry_run: bool,
+    created_at: str,
+) -> List[Dict[str, Any]]:
+    records: List[Dict[str, Any]] = []
+    for role in WITNESS_MANDALA_REQUIRED_ROLES:
+        seed = _default_mandala_seed(role, title, summary)
+        witness_id = f"mandala-{claim_id}-{role}"
+        witness_path = claim_dir / "witness_mandala" / f"{claim_id}-{role}.json"
+        record: Dict[str, Any] = {
+            "witness_id": witness_id,
+            "claim_id": claim_id,
+            "role": role,
+            "witness_ref": str(witness_path.relative_to(REPO_ROOT)),
+            "created_at": created_at,
+            "confidence": 0.72,
+            **seed,
+        }
+        _write_json(witness_path, record, force=force, dry_run=dry_run)
+        records.append(record)
+    return records
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Scaffold a promotion-ready claim packet with support files.")
     parser.add_argument("--node", required=True, help="Node id, e.g. anchor-03-ml-intelligence-engineering")
@@ -265,7 +402,14 @@ def main() -> int:
         ],
         help="Requested promotion stage",
     )
-    parser.add_argument("--lane", default="", help="Lane override (default inferred from stage)")
+    parser.add_argument(
+        "--lane",
+        default="",
+        help=(
+            "Lane override (default inferred from stage). Must be one of: "
+            + ", ".join(NODE_LANES)
+        ),
+    )
     parser.add_argument(
         "--cross-node",
         action="append",
@@ -277,6 +421,11 @@ def main() -> int:
         action="append",
         default=[],
         help="Artifact ref path (repeatable). Defaults to agora/node_governance.py",
+    )
+    parser.add_argument(
+        "--witness-mandala",
+        action="store_true",
+        help="Add pressure-role witness records instead of relying only on affirmation count",
     )
     parser.add_argument("--force", action="store_true", help="Overwrite existing files")
     parser.add_argument("--dry-run", action="store_true", help="Print intended files without writing")
@@ -315,7 +464,23 @@ def main() -> int:
     )
 
     artifacts = _unique(args.artifact_ref) if args.artifact_ref else ["agora/node_governance.py"]
-    lane = args.lane.strip() if args.lane.strip() else _default_lane_for_stage(args.stage)
+    try:
+        lane = _resolve_lane(args.stage, args.lane)
+    except ValueError as exc:
+        raise SystemExit(str(exc)) from exc
+    mandala_records = (
+        _build_witness_mandala(
+            claim_id=claim_id,
+            claim_dir=claims_dir,
+            title=args.title,
+            summary=args.summary,
+            force=args.force,
+            dry_run=args.dry_run,
+            created_at=created_at,
+        )
+        if args.witness_mandala
+        else []
+    )
 
     threshold_completed_at = _iso(now - timedelta(days=16))
     cooldown_until = _iso(now - timedelta(days=1))
@@ -348,6 +513,20 @@ def main() -> int:
         "created_at": created_at,
         "updated_at": created_at,
     }
+    if mandala_records:
+        claim["witness_mandala_required"] = True
+        claim["witness_mandala"] = {
+            "version": "1.0",
+            "intention": (
+                "Witnessing is reality contact: each role must sharpen, bound, "
+                "challenge, protect, or create the next test for the claim."
+            ),
+            "required_roles": list(WITNESS_MANDALA_REQUIRED_ROLES),
+            "records": mandala_records,
+        }
+        claim["witness_mandala_refs"] = [
+            str(record["witness_ref"]) for record in mandala_records
+        ]
 
     claim_path = claims_dir / f"{claim_id}.json"
     _write_json(claim_path, claim, force=args.force, dry_run=args.dry_run)
@@ -359,7 +538,9 @@ def main() -> int:
         "claim_path": str(claim_path.relative_to(REPO_ROOT)),
         "node_coordinate": node_coordinate,
         "requested_stage": args.stage,
+        "lane": lane,
         "cross_nodes": cross_nodes,
+        "witness_mandala_required": bool(mandala_records),
         "validate_command": (
             f"python3 scripts/validate_claim_packet.py --claim {claim_path.relative_to(REPO_ROOT)} "
             f"--stage {args.stage}"

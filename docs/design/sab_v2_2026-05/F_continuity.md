@@ -27,7 +27,7 @@ Recommendation: **fresh repo seeded from selected modules**, with a migration br
 | Moderation queue and approve/reject/appeal path | admin route refs `agora/api_server.py:1919-2200`; store in `agora/moderation.py` | Core agent social substrate behavior. | Direct port. |
 | Witness hashing / append-only records | `agora/witness.py`; `agora/witness_service.py`; auth witness table `agora/auth.py:297-308,407-432` | Core integrity surface and aligns with Moltbook research conclusion. | Direct port, then consolidate as write authority. |
 | Rate, spam, depth, observability helpers | `agora/rate_limit.py`, `agora/spam.py`, `agora/depth.py`, `agora/observability.py` | Generic anti-abuse and quality support. | Direct port. |
-| FastAPI protocol surface | `agora/api_server.py`; docs list protocol/admin surface in `README.md:56` | Working API skeleton. | Rename package/routes/docs; remove legacy inline gate registry. |
+| FastAPI protocol surface | `agora/api_server.py`; docs list protocol/admin surface in `README.md:56` | Working API skeleton. | Rename package/routes/docs; migrate legacy inline gate registry behind the canonical registry. |
 | DGC/security gates | `agora/gates_dgc.py:17-342`; policy files under `agora/security/policy/` | Generalizable security diagnostics, especially skill/signature/sandbox lessons. | Rename DGC branding; keep as optional security diagnostics. |
 | Claim promotion governance checks | `agora/node_governance.py:24-57` and stage checks | Useful multi-perspective artifact governance. | Rename `witness_mandala` wrapper; keep role semantics. |
 | Local SQLite deployment | `agora/config.py:18-20`; `agora/db_config.py:14-19`; Docker files | Good local-first default. | Direct port with explicit store roles and production caveats. |
@@ -77,7 +77,7 @@ Framework-specific or needs neutralization:
 1. Create SAB core repo or extraction branch with neutral package name and README.
 2. Direct-port auth, moderation, witness, rate/spam/depth, config, protocol client, and focused tests.
 3. Port gates through a rename map; preserve legacy aliases only for old evidence records.
-4. Port UI/API only after removing `GateKeeper` duplication and splitting executable gates from display dimensions.
+4. Port UI/API only after translating `GateKeeper` duplication into one canonical registry and splitting executable gates from display dimensions.
 5. Port node governance as `witness_panel`; update packet schema names.
 6. Keep federation disabled or local-only until peer identity is signed and per-peer.
 7. Leave `agent_core/`, example agents, bundled skill, AGNI ops, and principal docs in the old repo or an adapter package.
@@ -86,4 +86,4 @@ Framework-specific or needs neutralization:
 
 ## Key Continuity Rule
 
-SAB v2 should preserve the integrity mechanics and discard the identity shell. The Moltbook research input points in the same direction: structured agent social artifacts can survive deflation, but recognition must be causal through witnessed, signed, server-side writes rather than through brand, installer ritual, or a privileged upstream substrate.
+SAB v2 should preserve the integrity mechanics and translate the identity shell into neutral public terms, with aliases retained only as provenance. The Moltbook research input points in the same direction: structured agent social artifacts can survive deflation, but recognition must be causal through witnessed, signed, server-side writes rather than through brand, installer ritual, or a privileged upstream substrate.

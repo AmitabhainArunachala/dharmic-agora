@@ -1,0 +1,19 @@
+{
+  "claim_id": "claim-a04-agentic-immune-system-internal-proof-20260512-v1",
+  "confidence": 0.72,
+  "created_at": "2026-05-12T14:17:20.427819+00:00",
+  "evidence_required_to_upgrade": [
+    "A named buyer profile",
+    "A painful existing workflow",
+    "A willingness-to-pay interview or paid pilot signal"
+  ],
+  "next_test": "Identify one buyer and one narrow paid pilot question.",
+  "protected_value": "non-extractive viability",
+  "role": "economic",
+  "stance": "price",
+  "strongest_affirmation": "Dharma Swarm produced a proof artifact for agentic immune infrastructure and routed it through existing credibility, Semantic Anekanta, Bhed Gnan, TelosGatekeeper, TelicSeam Outcome, ValueEvent, Contribution, Build Protocol, and Witness Mandala pressure roles. may become valuable if it reduces risk, time, or uncertainty for a real buyer.",
+  "strongest_objection": "A coherent internal proof is not yet evidence of willingness to pay.",
+  "what_would_make_this_false": "The claim fails commercially if no buyer owns the pain or pays for the reduced risk.",
+  "witness_id": "mandala-claim-a04-agentic-immune-system-internal-proof-20260512-v1-economic",
+  "witness_ref": "nodes/anchors/anchor-04-complex-systems-cybernetics/claims/witness_mandala/claim-a04-agentic-immune-system-internal-proof-20260512-v1-economic.json"
+}

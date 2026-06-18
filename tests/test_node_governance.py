@@ -14,6 +14,7 @@ from agora.node_governance import (
     STAGE_PAPER_INTERNAL,
     STAGE_VENTURE_EXTERNAL,
     STAGE_VENTURE_PROPOSAL,
+    WITNESS_MANDALA_REQUIRED_ROLES,
     evaluate_claim_for_stage,
 )
 
@@ -61,6 +62,34 @@ def _base_claim() -> dict:
         "created_at": (NOW - timedelta(days=17)).isoformat(),
         "updated_at": completed,
     }
+
+
+def _witness_mandala_records() -> list[dict]:
+    return [
+        {
+            "role": role,
+            "stance": "challenge" if role == "adversarial" else "verify",
+            "strongest_affirmation": f"{role} affirmation",
+            "strongest_objection": f"{role} objection",
+            "what_would_make_this_false": f"{role} falsifier",
+            "evidence_required_to_upgrade": [f"{role} evidence"],
+            "protected_value": f"{role} protected value",
+            "next_test": f"{role} next test",
+            "confidence": 0.72,
+            "witness_ref": f"witness_mandala/{role}.json",
+        }
+        for role in WITNESS_MANDALA_REQUIRED_ROLES
+    ]
+
+
+def _add_witness_mandala(claim: dict) -> dict:
+    claim["witness_mandala_required"] = True
+    claim["witness_mandala"] = {
+        "version": "1.0",
+        "required_roles": list(WITNESS_MANDALA_REQUIRED_ROLES),
+        "records": _witness_mandala_records(),
+    }
+    return claim
 
 
 def test_paper_internal_draft_passes() -> None:
@@ -138,6 +167,30 @@ def test_venture_proposal_requires_two_red_team_memos() -> None:
     result = evaluate_claim_for_stage(claim, STAGE_VENTURE_PROPOSAL, now=NOW)
     assert result.passed is False
     assert any("red-team memos" in msg for msg in result.errors)
+
+
+def test_venture_proposal_passes_with_complete_witness_mandala_when_required() -> None:
+    claim = _add_witness_mandala(_base_claim())
+    result = evaluate_claim_for_stage(claim, STAGE_VENTURE_PROPOSAL, now=NOW)
+    assert result.passed is True
+    assert result.metrics["witness_mandala_complete"] is True
+    assert result.metrics["witness_mandala_complete_role_count"] == 6
+
+
+def test_required_witness_mandala_fails_when_role_missing() -> None:
+    claim = _add_witness_mandala(_base_claim())
+    claim["witness_mandala"]["records"] = claim["witness_mandala"]["records"][:-1]
+    result = evaluate_claim_for_stage(claim, STAGE_VENTURE_PROPOSAL, now=NOW)
+    assert result.passed is False
+    assert any("witness mandala missing required roles" in msg for msg in result.errors)
+
+
+def test_witness_mandala_fails_when_pressure_field_missing() -> None:
+    claim = _add_witness_mandala(_base_claim())
+    claim["witness_mandala"]["records"][0]["what_would_make_this_false"] = ""
+    result = evaluate_claim_for_stage(claim, STAGE_VENTURE_PROPOSAL, now=NOW)
+    assert result.passed is False
+    assert any("missing required fields" in msg for msg in result.errors)
 
 
 def test_venture_external_release_requires_assessments_and_quarantine() -> None:

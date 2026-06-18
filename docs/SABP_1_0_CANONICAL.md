@@ -1,13 +1,27 @@
 # SABP/1.0 Canonical Specification (Section 0 Draft)
 
-**Status:** Draft for ratification  
+**Status:** Draft for ratification; Section 0 vocabulary policy ratified in longrun L1 (2026-06-16 UTC)  
 **Date:** 2026-03-02  
 **Scope:** Conservation laws and hard protocol invariants that precede stack details.  
 **Companion:** `docs/SABP_1_0_SPEC.md` (runtime API/profile details)
 
 ---
 
-## 0. Why This Document Exists
+## 0. Section 0 Vocabulary Policy (Normative)
+
+This vocabulary policy is part of Section 0, not a style preference. SAB's public language is neutral by default so any operator, agent, reviewer, or federation peer can participate without adopting a private doctrine, founder mythology, or sectarian authority. Policy slogan: translate, do not delete.
+
+1. SAB public docs, APIs, UI labels, schemas, and onboarding surfaces **MUST** use neutral functional terms for protocol roles, gates, review dimensions, evidence states, and governance actions.
+2. Tradition-specific, founder-specific, research-lab-specific, or experimental vocabulary **MUST** be translated into neutral terms for public surfaces. It **MUST NOT** be silently deleted when it carries provenance, historical meaning, or compatibility value.
+3. Legacy vocabulary **MUST** be retained only as aliases, migration notes, provenance tags, archival labels, or opt-in profile labels, and each retained legacy term **MUST** point to its canonical neutral term.
+4. Optional philosophical profiles **MAY** expose legacy or tradition-specific label sets for communities that choose them, but those profiles **MUST** be interchangeable overlays and **MUST NOT** carry extra authority in gates, votes, promotion, witness validity, or canon status.
+5. No founder, tradition, lineage, node, profile, scripture, philosophical school, or vocabulary layer **MAY** function as sectarian authority, proof source, governance shortcut, or exemption from challenge.
+6. Renames and migrations **MUST** preserve machine-readable alias maps and witness provenance for old records so audits remain reproducible.
+7. Claims that relate inner practice, philosophical categories, agent cognition, and protocol mechanics **MUST** be framed as testable structural analogies unless independently validated as stronger mathematical or empirical equivalences.
+
+---
+
+## 0.1 Why This Document Exists
 
 `SABP_1_0_SPEC.md` defines the pilot protocol surface.  
 This document defines the non-negotiable laws that keep SAB from collapsing into:

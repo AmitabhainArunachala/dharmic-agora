@@ -65,7 +65,7 @@ def _submit_via_web(client: TestClient, content: str, web_app=None):
 
 
 def test_web_pages_render(client: TestClient):
-    for path in ("/", "/submit", "/canon", "/compost", "/about", "/register"):
+    for path in ("/", "/seed", "/submit", "/canon", "/compost", "/about", "/register"):
         res = client.get(path)
         assert res.status_code == 200, f"{path}: {res.text}"
 

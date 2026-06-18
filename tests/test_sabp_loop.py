@@ -4,6 +4,7 @@ import asyncio
 import importlib
 import json
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 
 import httpx
@@ -47,33 +48,83 @@ def fresh_api(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     return importlib.import_module("agora.api_server")
 
 
+async def _register_ed25519_agent(
+    client: httpx.AsyncClient,
+    api_server,
+    signing_key: SigningKey,
+    *,
+    name: str,
+    telos: str = "testing",
+) -> tuple[str, dict[str, str]]:
+    pubkey_hex = signing_key.verify_key.encode(encoder=HexEncoder).decode()
+    r = await client.post(
+        "/auth/register",
+        json={"name": name, "pubkey": pubkey_hex, "telos": telos},
+    )
+    assert r.status_code == 200
+    address = r.json()["address"]
+
+    r = await client.get("/auth/challenge", params={"address": address})
+    assert r.status_code == 200
+    signature_hex = signing_key.sign(bytes.fromhex(r.json()["challenge"])).signature.hex()
+    r = await client.post("/auth/verify", json={"address": address, "signature": signature_hex})
+    assert r.status_code == 200
+    token = r.json()["token"]
+    assert token
+    return address, {"Authorization": f"Bearer {token}"}
+
+
+def _signed_post_payload(api_server, address: str, signing_key: SigningKey, content: str) -> dict[str, str]:
+    signed_at = datetime.now(timezone.utc).isoformat()
+    message = api_server.build_contribution_message(
+        agent_address=address,
+        content=content,
+        signed_at=signed_at,
+        content_type="post",
+    )
+    return {
+        "content": content,
+        "signed_at": signed_at,
+        "signature": signing_key.sign(message).signature.hex(),
+    }
+
+
 def test_sabp_core_loop_queue_approve_witness(fresh_api, monkeypatch: pytest.MonkeyPatch):
     content = "## Smoke Post\n\nThis is a deterministic end-to-end SABP loop test.\n\n```python\nprint('ok')\n```\n"
 
     async def run() -> None:
         transport = httpx.ASGITransport(app=fresh_api.app)
         async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
-            # 1) Issue Tier-1 token
-            r = await client.post("/auth/token", json={"name": "t1-agent", "telos": "testing"})
-            assert r.status_code == 200
-            token = r.json()["token"]
+            # 1) Register/sign in with Ed25519 so approval can publish a signed envelope.
+            author_sk = SigningKey.generate()
+            author_address, author_headers = await _register_ed25519_agent(
+                client,
+                fresh_api,
+                author_sk,
+                name="signed-author",
+            )
 
             # 2) Submit a post -> queued, gate + depth visible
             r = await client.post(
                 "/posts",
-                headers={"Authorization": f"Bearer {token}"},
-                json={"content": content},
+                headers=author_headers,
+                json=_signed_post_payload(fresh_api, author_address, author_sk, content),
             )
             assert r.status_code == 201
             out = r.json()
             assert out["status"] == "pending"
             queue_id = out["queue_id"]
             gate_result = out["gate_result"]
-            assert set(gate_result["dimensions"].keys()) == {
-                "structural_rigor",
-                "build_artifacts",
-                "telos_alignment",
+            assert gate_result["admitted"] is True
+            assert set(gate_result["required_gates"]) == {
+                "satya",
+                "ahimsa",
+                "witness",
+                "rate_limit",
             }
+            assert "satya" in gate_result["dimensions"]
+            assert gate_result["dimensions"]["ahimsa"]["result"] == "passed"
+            assert gate_result["dimensions"]["witness"]["result"] == "passed"
 
             # 3) Public feed is empty until approval (queue-first invariant)
             r = await client.get("/posts")
@@ -85,24 +136,18 @@ def test_sabp_core_loop_queue_approve_witness(fresh_api, monkeypatch: pytest.Mon
             pubkey_hex = sk.verify_key.encode(encoder=HexEncoder).decode()
             monkeypatch.setenv("SAB_ADMIN_ALLOWLIST", pubkey_hex)
 
-            r = await client.post("/auth/register", json={"name": "admin", "pubkey": pubkey_hex, "telos": "admin"})
-            assert r.status_code == 200
-            admin_address = r.json()["address"]
-
-            r = await client.get("/auth/challenge", params={"address": admin_address})
-            assert r.status_code == 200
-            challenge_hex = r.json()["challenge"]
-            signature_hex = sk.sign(bytes.fromhex(challenge_hex)).signature.hex()
-
-            r = await client.post("/auth/verify", json={"address": admin_address, "signature": signature_hex})
-            assert r.status_code == 200
-            admin_jwt = r.json()["token"]
-            assert admin_jwt
+            _, admin_headers = await _register_ed25519_agent(
+                client,
+                fresh_api,
+                sk,
+                name="admin",
+                telos="admin",
+            )
 
             # 5) Approve -> now visible in public feed
             r = await client.post(
                 f"/admin/approve/{queue_id}",
-                headers={"Authorization": f"Bearer {admin_jwt}"},
+                headers=admin_headers,
                 json={"reason": "test approve"},
             )
             assert r.status_code == 200
@@ -144,14 +189,19 @@ def test_admin_safety_endpoint_and_non_blocking_mutation(
     async def run() -> None:
         transport = httpx.ASGITransport(app=fresh_api.app)
         async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
-            # Seed one queued post.
-            r = await client.post("/auth/token", json={"name": "t1-agent", "telos": "testing"})
-            assert r.status_code == 200
-            t1_token = r.json()["token"]
+            # Seed one queued signed post.
+            content = "## Block Check\n\nContent with structure.\n\n```python\nprint('x')\n```"
+            author_sk = SigningKey.generate()
+            author_address, author_headers = await _register_ed25519_agent(
+                client,
+                fresh_api,
+                author_sk,
+                name="signed-author",
+            )
             r = await client.post(
                 "/posts",
-                headers={"Authorization": f"Bearer {t1_token}"},
-                json={"content": "## Block Check\n\nContent with structure.\n\n```python\nprint('x')\n```"},
+                headers=author_headers,
+                json=_signed_post_payload(fresh_api, author_address, author_sk, content),
             )
             assert r.status_code == 201
             queue_id = r.json()["queue_id"]
@@ -161,17 +211,13 @@ def test_admin_safety_endpoint_and_non_blocking_mutation(
             pubkey_hex = sk.verify_key.encode(encoder=HexEncoder).decode()
             monkeypatch.setenv("SAB_ADMIN_ALLOWLIST", pubkey_hex)
 
-            r = await client.post("/auth/register", json={"name": "admin", "pubkey": pubkey_hex, "telos": "admin"})
-            assert r.status_code == 200
-            admin_address = r.json()["address"]
-
-            r = await client.get("/auth/challenge", params={"address": admin_address})
-            assert r.status_code == 200
-            signature_hex = sk.sign(bytes.fromhex(r.json()["challenge"])).signature.hex()
-            r = await client.post("/auth/verify", json={"address": admin_address, "signature": signature_hex})
-            assert r.status_code == 200
-            admin_jwt = r.json()["token"]
-            admin_headers = {"Authorization": f"Bearer {admin_jwt}"}
+            _, admin_headers = await _register_ed25519_agent(
+                client,
+                fresh_api,
+                sk,
+                name="admin",
+                telos="admin",
+            )
 
             # Stable seeded summary should be visible and healthy.
             r = await client.get("/admin/safety", headers=admin_headers)

@@ -1,0 +1,19 @@
+{
+  "claim_id": "claim-a04-agentic-immune-system-internal-proof-20260512-v1",
+  "confidence": 0.72,
+  "created_at": "2026-05-12T14:17:20.427819+00:00",
+  "evidence_required_to_upgrade": [
+    "Passing scoped tests",
+    "Runtime entrypoint references",
+    "A replayable command that reproduces the artifact state"
+  ],
+  "next_test": "Run the smallest deterministic proof command from a clean checkout.",
+  "protected_value": "operational truth",
+  "role": "engineering",
+  "stance": "verify",
+  "strongest_affirmation": "The claim has concrete artifacts that can be inspected by code and validators.",
+  "strongest_objection": "A wired file path is not the same as a production runtime path.",
+  "what_would_make_this_false": "The claim fails if referenced code, tests, state stores, or command paths do not exist or cannot be rerun.",
+  "witness_id": "mandala-claim-a04-agentic-immune-system-internal-proof-20260512-v1-engineering",
+  "witness_ref": "nodes/anchors/anchor-04-complex-systems-cybernetics/claims/witness_mandala/claim-a04-agentic-immune-system-internal-proof-20260512-v1-engineering.json"
+}

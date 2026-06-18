@@ -18,7 +18,7 @@ import math
 import os
 import sqlite3
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Literal
 from contextlib import contextmanager
@@ -33,12 +33,19 @@ try:
     from agora.auth import AgentAuth, build_contribution_message
     from agora.config import SAB_VERSION, get_db_path
     from agora.depth import calculate_depth_score
-    from agora.gates import OrthogonalGates
+    from agora.gates import ALL_GATES, OrthogonalGates, evaluate_submission_gates
     from agora.moderation import ModerationStore
     from agora.pilot import PilotManager
     from agora.convergence import ConvergenceStore
     from agora.federation import federation_router
     from agora.node_coordinates import normalize_node_coordinate
+    from agora.witness_service import (
+        GOVERNANCE_WITNESS_DOMAIN,
+        PUBLICATION_WITNESS_DOMAIN,
+        attach_witness_meta,
+        decode_related_link_ids,
+        encode_related_link_ids,
+    )
 except ImportError:
     # Allow running from parent directory
     import sys
@@ -46,12 +53,19 @@ except ImportError:
     from agora.auth import AgentAuth, build_contribution_message
     from agora.config import SAB_VERSION, get_db_path
     from agora.depth import calculate_depth_score
-    from agora.gates import OrthogonalGates
+    from agora.gates import ALL_GATES, OrthogonalGates, evaluate_submission_gates
     from agora.moderation import ModerationStore
     from agora.pilot import PilotManager
     from agora.convergence import ConvergenceStore
     from agora.federation import federation_router
     from agora.node_coordinates import normalize_node_coordinate
+    from agora.witness_service import (
+        GOVERNANCE_WITNESS_DOMAIN,
+        PUBLICATION_WITNESS_DOMAIN,
+        attach_witness_meta,
+        decode_related_link_ids,
+        encode_related_link_ids,
+    )
 
 # =============================================================================
 # CONFIGURATION
@@ -71,6 +85,12 @@ PROMOTION_REQUIREMENTS = {
 }
 VERIFIED_CONTRIBUTOR_TIER = "verified_contributor"
 LOGGER = logging.getLogger(__name__)
+AUTHORITY_SIGNATURE_REQUIRED_DETAIL = (
+    "Durable authority writes require a verified Ed25519 signed content envelope"
+)
+AUTHORITY_ACTOR_REQUIRED_DETAIL = (
+    "Durable authority writes require Ed25519 authentication"
+)
 
 # =============================================================================
 # DATABASE SETUP
@@ -184,9 +204,19 @@ def init_database():
             resource_id INTEGER,
             data_hash TEXT NOT NULL,
             previous_hash TEXT,
-            details TEXT
+            details TEXT,
+            witness_domain TEXT NOT NULL DEFAULT 'governance',
+            witness_link_id TEXT,
+            related_link_ids_json TEXT NOT NULL DEFAULT '[]'
         )
     """)
+    ensure_column("audit_trail", "witness_domain", "witness_domain TEXT DEFAULT 'governance'")
+    ensure_column("audit_trail", "witness_link_id", "witness_link_id TEXT")
+    ensure_column(
+        "audit_trail",
+        "related_link_ids_json",
+        "related_link_ids_json TEXT NOT NULL DEFAULT '[]'",
+    )
 
     # Accepted corrections (integrity signal for promotion unlocks)
     cursor.execute(
@@ -233,6 +263,7 @@ def init_database():
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_votes_content ON votes(content_type, content_id)")
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_audit_action ON audit_trail(action)")
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_audit_agent ON audit_trail(agent_address)")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_audit_link ON audit_trail(witness_link_id)")
     cursor.execute(
         """
         CREATE INDEX IF NOT EXISTS idx_correction_acceptances_author
@@ -267,8 +298,27 @@ def record_audit(
     resource_type: Optional[str],
     resource_id: Optional[int],
     details: dict,
+    *,
+    witness_domain: str = GOVERNANCE_WITNESS_DOMAIN,
+    witness_link_id: Optional[str] = None,
+    related_link_ids: Optional[List[str]] = None,
+    subject_type: Optional[str] = None,
+    subject_id: Optional[Any] = None,
+    origin: str = "agora.api_server",
 ) -> Dict[str, Any]:
     """Record action to public audit trail and return hash-chain metadata."""
+    witness_link_id, details_with_meta, normalized_related = attach_witness_meta(
+        details,
+        domain=witness_domain,
+        action=action,
+        actor_id=agent_address,
+        subject_type=subject_type or resource_type or "resource",
+        subject_id=subject_id if subject_id is not None else resource_id,
+        origin=origin,
+        witness_link_id=witness_link_id,
+        related_link_ids=related_link_ids,
+    )
+    related_link_ids_json = encode_related_link_ids(normalized_related)
     with get_db() as conn:
         cursor = conn.cursor()
         
@@ -282,7 +332,10 @@ def record_audit(
             "action": action,
             "agent": agent_address,
             "resource": f"{resource_type}:{resource_id}" if resource_type else None,
-            "details": details,
+            "details": details_with_meta,
+            "witness_domain": witness_domain,
+            "witness_link_id": witness_link_id,
+            "related_link_ids_json": related_link_ids_json,
             "previous": previous_hash
         }
         data_hash = hashlib.sha256(json.dumps(data, sort_keys=True).encode()).hexdigest()
@@ -290,8 +343,9 @@ def record_audit(
         cursor.execute("""
             INSERT INTO audit_trail (timestamp, action, agent_address, 
                                      resource_type, resource_id, data_hash, 
-                                     previous_hash, details)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                                     previous_hash, details, witness_domain,
+                                     witness_link_id, related_link_ids_json)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
             datetime.now(timezone.utc).isoformat(),
             action,
@@ -300,11 +354,21 @@ def record_audit(
             resource_id,
             data_hash,
             previous_hash,
-            json.dumps(details)
+            json.dumps(details_with_meta),
+            witness_domain,
+            witness_link_id,
+            related_link_ids_json,
         ))
         audit_id = cursor.lastrowid
         conn.commit()
-    return {"id": audit_id, "data_hash": data_hash, "previous_hash": previous_hash}
+    return {
+        "id": audit_id,
+        "data_hash": data_hash,
+        "previous_hash": previous_hash,
+        "witness_domain": witness_domain,
+        "witness_link_id": witness_link_id,
+        "related_link_ids": normalized_related,
+    }
 
 
 # Initialize database on module load
@@ -601,6 +665,8 @@ class AuditEntry(BaseModel):
     resource_type: Optional[str]
     resource_id: Optional[int]
     data_hash: str
+    witness_domain: Optional[str] = None
+    witness_link_id: Optional[str] = None
 
 
 def _validate_metadata_map(
@@ -857,6 +923,46 @@ def _require_iso8601(value: str, field_name: str) -> None:
         raise HTTPException(status_code=400, detail=f"Invalid ISO8601 timestamp for {field_name}")
 
 
+def _require_durable_authority_actor(agent: dict) -> None:
+    if agent.get("auth_method") != "ed25519":
+        raise HTTPException(status_code=403, detail=AUTHORITY_ACTOR_REQUIRED_DETAIL)
+
+
+def _build_queued_content_message(item: Dict[str, Any]) -> bytes:
+    content_type = str(item.get("content_type") or "")
+    signed_at = str(item.get("signed_at") or "")
+    if content_type == "post":
+        return build_contribution_message(
+            agent_address=str(item["author_address"]),
+            content=str(item["content"]),
+            signed_at=signed_at,
+            content_type="post",
+        )
+    if content_type == "comment":
+        post_id = item.get("post_id")
+        parent_id = item.get("parent_id")
+        return build_contribution_message(
+            agent_address=str(item["author_address"]),
+            content=str(item["content"]),
+            signed_at=signed_at,
+            content_type="comment",
+            post_id=int(post_id) if post_id is not None else None,
+            parent_id=int(parent_id) if parent_id is not None else None,
+        )
+    raise HTTPException(status_code=400, detail=f"Unsupported queued content type: {content_type}")
+
+
+def _require_verified_queued_content_envelope(item: Dict[str, Any]) -> None:
+    signature = item.get("signature")
+    signed_at = item.get("signed_at")
+    if not signature or not signed_at:
+        raise HTTPException(status_code=400, detail=AUTHORITY_SIGNATURE_REQUIRED_DETAIL)
+    _require_iso8601(str(signed_at), "signed_at")
+    message = _build_queued_content_message(item)
+    if not _auth.verify_contribution(str(item["author_address"]), message, str(signature)):
+        raise HTTPException(status_code=400, detail=AUTHORITY_SIGNATURE_REQUIRED_DETAIL)
+
+
 def _convergence_health_snapshot() -> Dict[str, int]:
     with get_db() as conn:
         cursor = conn.cursor()
@@ -1060,6 +1166,112 @@ def _promotion_snapshot(agent_address: str, auth_method: str) -> Dict[str, Any]:
             "on_promotion": ["moderation_vote", "governance_proposals", "high_trust_mutations"],
         },
     }
+
+
+def _submission_first_seen(cursor: sqlite3.Cursor, agent_address: str) -> Optional[datetime]:
+    first_seen: Optional[datetime] = None
+    first_seen_queries = (
+        "SELECT created_at FROM agents WHERE address = ? LIMIT 1",
+        "SELECT created_at FROM simple_tokens WHERE address = ? LIMIT 1",
+        "SELECT created_at FROM api_keys WHERE address = ? LIMIT 1",
+    )
+    for query in first_seen_queries:
+        try:
+            cursor.execute(query, (agent_address,))
+        except sqlite3.OperationalError:
+            continue
+        row = cursor.fetchone()
+        candidate = _parse_iso8601(row[0]) if row else None
+        if candidate and (first_seen is None or candidate < first_seen):
+            first_seen = candidate
+    return first_seen
+
+
+def _submission_gate_context(
+    conn: sqlite3.Connection,
+    agent: Dict[str, Any],
+    *,
+    parent_content: Optional[str] = None,
+) -> Dict[str, Any]:
+    cursor = conn.cursor()
+    now = datetime.now(timezone.utc)
+    one_hour_ago = (now - timedelta(hours=1)).isoformat()
+    one_day_ago = (now - timedelta(days=1)).isoformat()
+
+    try:
+        cursor.execute(
+            "SELECT COUNT(*) FROM moderation_queue WHERE author_address = ? AND created_at >= ?",
+            (agent["address"], one_hour_ago),
+        )
+        posts_last_hour = int(cursor.fetchone()[0] or 0)
+        cursor.execute(
+            "SELECT COUNT(*) FROM moderation_queue WHERE author_address = ? AND created_at >= ?",
+            (agent["address"], one_day_ago),
+        )
+        posts_last_day = int(cursor.fetchone()[0] or 0)
+        cursor.execute(
+            """
+            SELECT content
+            FROM moderation_queue
+            ORDER BY id DESC
+            LIMIT 50
+            """
+        )
+        recent_hashes = [
+            hashlib.sha256(str(row[0]).encode()).hexdigest()
+            for row in cursor.fetchall()
+            if row and row[0] is not None
+        ]
+    except sqlite3.OperationalError:
+        posts_last_hour = 0
+        posts_last_day = 0
+        recent_hashes = []
+
+    first_seen = _submission_first_seen(cursor, agent["address"])
+    if first_seen is None:
+        auth_agent = _auth.get_agent(agent["address"])
+        if auth_agent:
+            first_seen = _parse_iso8601(auth_agent.created_at)
+
+    author_age_hours = 0.0
+    if first_seen is not None:
+        if first_seen.tzinfo is None:
+            first_seen = first_seen.replace(tzinfo=timezone.utc)
+        author_age_hours = max(0.0, (now - first_seen).total_seconds() / 3600.0)
+
+    return {
+        "author_posts_last_hour": posts_last_hour,
+        "author_posts_last_day": posts_last_day,
+        "author_age_hours": author_age_hours,
+        "author_reputation": float(agent.get("reputation", 0.0) or 0.0),
+        "recent_content_hashes": recent_hashes,
+        "author_telos": str(agent.get("telos", "") or ""),
+        "parent_content": parent_content,
+    }
+
+
+def _parent_content_for_submission(
+    conn: sqlite3.Connection,
+    post_id: int,
+    parent_id: Optional[int],
+) -> Optional[str]:
+    cursor = conn.cursor()
+    if parent_id is not None:
+        cursor.execute(
+            "SELECT content FROM comments WHERE id = ? AND post_id = ? AND is_deleted = 0",
+            (parent_id, post_id),
+        )
+        row = cursor.fetchone()
+        if row and row[0] is not None:
+            return str(row[0])
+    cursor.execute(
+        "SELECT content FROM posts WHERE id = ? AND is_deleted = 0",
+        (post_id,),
+    )
+    row = cursor.fetchone()
+    if row and row[0] is not None:
+        return str(row[0])
+    return None
 
 
 def _client_ip(request: Request) -> str:
@@ -1379,24 +1591,15 @@ async def create_post(
         if not _auth.verify_contribution(agent["address"], msg, request.signature):
             raise HTTPException(status_code=400, detail="Invalid contribution signature")
 
-    # Orthogonal gates (3 active dimensions) + depth scoring.
-    gate_result = OrthogonalGates().evaluate({"body": request.content}, agent_telos=agent.get("telos", ""))
+    with get_db() as conn:
+        gate_context = _submission_gate_context(conn, agent)
+    gate_result, gate_results, _, evidence_hash = evaluate_submission_gates(
+        request.content,
+        agent["address"],
+        gate_context,
+    )
     depth = calculate_depth_score(request.content)
     depth_score = float(depth["composite"])
-
-    # Convert dimensions into a stable list format for moderation logging.
-    gate_results = []
-    for dim, d in gate_result.get("dimensions", {}).items():
-        gate_results.append({
-            "name": dim,
-            "passed": bool(d.get("passed")),
-            "score": float(d.get("score", 0.0)),
-            "evidence": {"reason": d.get("reason", "")},
-        })
-
-    evidence_hash = hashlib.sha256(
-        json.dumps(gate_results, sort_keys=True, separators=(",", ":")).encode()
-    ).hexdigest()
 
     item = _moderation.enqueue(
         content_type="post",
@@ -1979,11 +2182,38 @@ async def admin_approve(
 ):
     """Approve a moderation queue item (admin only)."""
     _require_admin_mutation(agent)
+    item = _moderation.get_item(queue_id)
+    if not item:
+        raise HTTPException(status_code=404, detail="Queue item not found")
+    if item.get("status") != "approved":
+        _require_verified_queued_content_envelope(item)
     try:
         updated = _moderation.approve(queue_id, reviewer_address=agent["address"], reason=req.reason)
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
-    return {"status": updated["status"], "published_content_id": updated.get("published_content_id")}
+    audit = record_audit(
+        "moderation_approved",
+        agent["address"],
+        "moderation_queue",
+        queue_id,
+        {
+            "queue_id": queue_id,
+            "content_type": updated.get("content_type"),
+            "published_content_id": updated.get("published_content_id"),
+            "reason": req.reason,
+        },
+        witness_link_id=updated.get("witness_link_id"),
+        witness_domain=GOVERNANCE_WITNESS_DOMAIN,
+        subject_type="moderation_queue",
+        subject_id=queue_id,
+        origin="agora.api_server.admin_approve",
+    )
+    return {
+        "status": updated["status"],
+        "published_content_id": updated.get("published_content_id"),
+        "witness_link_id": updated.get("witness_link_id"),
+        "audit_id": audit["id"],
+    }
 
 
 @app.post("/admin/reject/{queue_id}")
@@ -1998,7 +2228,23 @@ async def admin_reject(
         updated = _moderation.reject(queue_id, reviewer_address=agent["address"], reason=req.reason)
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
-    return {"status": updated["status"]}
+    audit = record_audit(
+        "moderation_rejected",
+        agent["address"],
+        "moderation_queue",
+        queue_id,
+        {
+            "queue_id": queue_id,
+            "content_type": updated.get("content_type"),
+            "reason": req.reason,
+        },
+        witness_link_id=updated.get("witness_link_id"),
+        witness_domain=GOVERNANCE_WITNESS_DOMAIN,
+        subject_type="moderation_queue",
+        subject_id=queue_id,
+        origin="agora.api_server.admin_reject",
+    )
+    return {"status": updated["status"], "witness_link_id": updated.get("witness_link_id"), "audit_id": audit["id"]}
 
 
 @app.post("/admin/appeal/{queue_id}")
@@ -2012,7 +2258,23 @@ async def admin_appeal(
         updated = _moderation.appeal(queue_id, requester_address=agent["address"], reason=req.reason)
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
-    return {"status": updated["status"]}
+    audit = record_audit(
+        "moderation_appealed",
+        agent["address"],
+        "moderation_queue",
+        queue_id,
+        {
+            "queue_id": queue_id,
+            "content_type": updated.get("content_type"),
+            "reason": req.reason,
+        },
+        witness_link_id=updated.get("witness_link_id"),
+        witness_domain=GOVERNANCE_WITNESS_DOMAIN,
+        subject_type="moderation_queue",
+        subject_id=queue_id,
+        origin="agora.api_server.admin_appeal",
+    )
+    return {"status": updated["status"], "witness_link_id": updated.get("witness_link_id"), "audit_id": audit["id"]}
 
 
 # =============================================================================
@@ -2096,22 +2358,19 @@ async def create_comment(
         if not _auth.verify_contribution(agent["address"], msg, request.signature):
             raise HTTPException(status_code=400, detail="Invalid contribution signature")
 
-    gate_result = OrthogonalGates().evaluate({"body": request.content}, agent_telos=agent.get("telos", ""))
+    with get_db() as conn:
+        gate_context = _submission_gate_context(
+            conn,
+            agent,
+            parent_content=_parent_content_for_submission(conn, post_id, request.parent_id),
+        )
+    gate_result, gate_results, _, evidence_hash = evaluate_submission_gates(
+        request.content,
+        agent["address"],
+        gate_context,
+    )
     depth = calculate_depth_score(request.content)
     depth_score = float(depth["composite"])
-
-    gate_results = []
-    for dim, d in gate_result.get("dimensions", {}).items():
-        gate_results.append({
-            "name": dim,
-            "passed": bool(d.get("passed")),
-            "score": float(d.get("score", 0.0)),
-            "evidence": {"reason": d.get("reason", "")},
-        })
-
-    evidence_hash = hashlib.sha256(
-        json.dumps(gate_results, sort_keys=True, separators=(",", ":")).encode()
-    ).hexdigest()
 
     item = _moderation.enqueue(
         content_type="comment",
@@ -2186,6 +2445,7 @@ async def accept_correction(
     - post author
     - admin override (Ed25519 + allowlist)
     """
+    _require_durable_authority_actor(agent)
     reason = req.reason if req else None
 
     with get_db() as conn:
@@ -2299,8 +2559,8 @@ async def vote_post(
     Agents can upvote (+1) or downvote (-1).
     Each agent can only vote once per post (changed vote updates existing).
     """
-    if agent.get("auth_method") == "token":
-        raise HTTPException(status_code=403, detail="Simple token auth cannot vote")
+    if agent.get("auth_method") != "ed25519":
+        raise HTTPException(status_code=403, detail=AUTHORITY_ACTOR_REQUIRED_DETAIL)
     with get_db() as conn:
         cursor = conn.cursor()
         
@@ -2373,8 +2633,8 @@ async def vote_comment(
     agent: dict = Depends(get_current_agent)
 ):
     """Vote on a comment."""
-    if agent.get("auth_method") == "token":
-        raise HTTPException(status_code=403, detail="Simple token auth cannot vote")
+    if agent.get("auth_method") != "ed25519":
+        raise HTTPException(status_code=403, detail=AUTHORITY_ACTOR_REQUIRED_DETAIL)
     with get_db() as conn:
         cursor = conn.cursor()
         
@@ -2451,6 +2711,7 @@ async def witness_entries(
                 e["details"] = json.loads(e["details"])
             except json.JSONDecodeError:
                 continue
+        e["related_link_ids"] = decode_related_link_ids(e.get("related_link_ids_json"))
     return entries
 
 
@@ -2478,12 +2739,131 @@ async def witness_chain_info():
             row = None
     latest_hash = row[0] if row else None
     prev_hash = row[1] if row else None
+    linkage = _moderation.witness.verify_linkage()
+    linkage_valid = bool(linkage["linkage_valid"])
     return {
         "entry_count": count,
         "latest_hash": latest_hash,
         "previous_hash": prev_hash,
-        "chain_valid": True,  # Full verification is available via WitnessChain.verify_chain()
+        "chain_valid": linkage_valid,
+        "linkage_valid": linkage_valid,
+        "linkage_verification": {
+            "available": True,
+            "checked": True,
+            "entry_count": linkage["entry_count"],
+        },
+        "signature_valid": False,
+        "signature_verification": {
+            "available": False,
+            "checked": False,
+            "reason": "witness_chain entries do not carry independently verifiable signatures",
+        },
     }
+
+
+def _decode_json_text(raw_value: Any) -> Any:
+    if not isinstance(raw_value, str):
+        return raw_value
+    try:
+        return json.loads(raw_value)
+    except json.JSONDecodeError:
+        return raw_value
+
+
+def _serialize_triad_public_row(row: sqlite3.Row) -> Dict[str, Any]:
+    item = dict(row)
+    item["payload"] = _decode_json_text(item.get("payload"))
+    item["related_link_ids"] = decode_related_link_ids(item.get("related_link_ids_json"))
+    item["surface"] = "public_shell"
+    item["domain"] = PUBLICATION_WITNESS_DOMAIN
+    return item
+
+
+def _serialize_triad_protocol_row(row: sqlite3.Row) -> Dict[str, Any]:
+    item = dict(row)
+    item["details"] = _decode_json_text(item.get("details"))
+    item["related_link_ids"] = decode_related_link_ids(item.get("related_link_ids_json"))
+    item["surface"] = "protocol"
+    item["domain"] = item.get("witness_domain") or PUBLICATION_WITNESS_DOMAIN
+    return item
+
+
+def _serialize_triad_audit_row(row: sqlite3.Row) -> Dict[str, Any]:
+    item = dict(row)
+    item["details"] = _decode_json_text(item.get("details"))
+    item["related_link_ids"] = decode_related_link_ids(item.get("related_link_ids_json"))
+    item["domain"] = item.get("witness_domain") or GOVERNANCE_WITNESS_DOMAIN
+    return item
+
+
+@app.get("/witness/triad/{witness_link_id}")
+async def witness_triad_view(witness_link_id: str):
+    """Resolve publication and governance witness rows linked to one witnessed event."""
+    payload = {
+        "witness_link_id": witness_link_id,
+        "publication": {"public_shell": [], "protocol": []},
+        "artifact": [],
+        "governance": [],
+    }
+    with get_db() as conn:
+        cursor = conn.cursor()
+        try:
+            cursor.execute(
+                """
+                SELECT id, spark_id, witness_id, signature, action, payload, timestamp,
+                       witness_domain, witness_link_id, related_link_ids_json, prev_hash, hash
+                FROM spark_witness_chain
+                WHERE witness_link_id = ?
+                ORDER BY id ASC
+                """,
+                (witness_link_id,),
+            )
+            payload["publication"]["public_shell"] = [
+                _serialize_triad_public_row(row) for row in cursor.fetchall()
+            ]
+        except sqlite3.OperationalError:
+            payload["publication"]["public_shell"] = []
+
+        try:
+            cursor.execute(
+                """
+                SELECT id, timestamp, action, agent_address, content_id, details,
+                       witness_domain, witness_link_id, related_link_ids_json, prev_hash, hash
+                FROM witness_chain
+                WHERE witness_link_id = ?
+                ORDER BY id ASC
+                """,
+                (witness_link_id,),
+            )
+            payload["publication"]["protocol"] = [
+                _serialize_triad_protocol_row(row) for row in cursor.fetchall()
+            ]
+        except sqlite3.OperationalError:
+            payload["publication"]["protocol"] = []
+
+        cursor.execute(
+            """
+            SELECT id, timestamp, action, agent_address, resource_type, resource_id,
+                   data_hash, previous_hash, details, witness_domain, witness_link_id,
+                   related_link_ids_json
+            FROM audit_trail
+            WHERE witness_link_id = ?
+            ORDER BY id ASC
+            """,
+            (witness_link_id,),
+        )
+        payload["governance"] = [_serialize_triad_audit_row(row) for row in cursor.fetchall()]
+
+    payload["present_domains"] = [
+        domain_name
+        for domain_name, present in (
+            ("publication.public_shell", bool(payload["publication"]["public_shell"])),
+            ("publication.protocol", bool(payload["publication"]["protocol"])),
+            ("governance", bool(payload["governance"])),
+        )
+        if present
+    ]
+    return payload
 
 
 @app.get("/status")
@@ -2508,14 +2888,13 @@ async def get_status():
         except Exception:
             witness_entries = 0
 
-    active_dims = [k for k, v in OrthogonalGates.DIMENSIONS.items() if v.get("active")]
     return {
         "status": "healthy",
         "version": SAB_VERSION,
         "agents": agents,
         "posts": posts,
         "witness_entries": witness_entries,
-        "gates_active": len(active_dims),
+        "gates_active": len(ALL_GATES),
         "timestamp": datetime.now(timezone.utc).isoformat(),
     }
 
@@ -2536,7 +2915,7 @@ async def get_audit_trail(
         if action:
             cursor.execute("""
                 SELECT id, timestamp, action, agent_address, resource_type, 
-                       resource_id, data_hash
+                       resource_id, data_hash, witness_domain, witness_link_id
                 FROM audit_trail
                 WHERE action = ?
                 ORDER BY id DESC
@@ -2545,7 +2924,7 @@ async def get_audit_trail(
         else:
             cursor.execute("""
                 SELECT id, timestamp, action, agent_address, resource_type,
-                       resource_id, data_hash
+                       resource_id, data_hash, witness_domain, witness_link_id
                 FROM audit_trail
                 ORDER BY id DESC
                 LIMIT ? OFFSET ?
@@ -2558,12 +2937,18 @@ async def get_audit_trail(
 
 @app.get("/gates", response_model=GateStatus)
 async def get_gate_status():
-    """Get information about the active SAB gate dimensions."""
-    active = [k for k, v in OrthogonalGates.DIMENSIONS.items() if v.get("active")]
+    """Get information about the canonical SAB gate protocol."""
+    active = [gate.name for gate in ALL_GATES]
     return GateStatus(
         active_dimensions=active,
         total_active=len(active),
-        dimensions=OrthogonalGates.DIMENSIONS,
+        dimensions={
+            gate.name: {
+                "required": gate.required,
+                "weight": gate.weight,
+            }
+            for gate in ALL_GATES
+        },
     )
 
 
@@ -2573,7 +2958,11 @@ async def evaluate_gates(
     agent_telos: str = Query("", max_length=2000),
 ):
     """Evaluate gate + depth scores without submitting content."""
-    gate_result = OrthogonalGates().evaluate({"body": content}, agent_telos=agent_telos)
+    gate_result, _, _, _ = evaluate_submission_gates(
+        content,
+        "0" * 16,
+        {"author_telos": agent_telos},
+    )
     depth = calculate_depth_score(content)
     return {
         "gate_result": gate_result,
@@ -2622,7 +3011,7 @@ async def health_check():
         "status": "healthy",
         "agora": "dharmic",
         "version": SAB_VERSION,
-        "gates": len(GateKeeper.ALL_GATES),
+        "gates": len(ALL_GATES),
         "convergence": convergence,
         "timestamp": datetime.now(timezone.utc).isoformat()
     }

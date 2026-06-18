@@ -1,0 +1,104 @@
+{# ── SAB Jinja2 Component Macros ── #}
+
+{# Status badge #}
+{% macro status_badge(status) %}
+{%- if status == 'canon' -%}
+<span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium badge-canon">
+  <svg class="w-3 h-3" viewBox="0 0 16 16" fill="currentColor"><path d="M8 1l2 5h5l-4 3 1.5 5L8 11l-4.5 3L5 9 1 6h5z"/></svg>
+  Canon
+</span>
+{%- elif status == 'compost' -%}
+<span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium badge-compost">
+  <svg class="w-3 h-3" viewBox="0 0 16 16" fill="currentColor"><path d="M8 2a6 6 0 100 12A6 6 0 008 2zm3 7H5V7h6v2z"/></svg>
+  Compost
+</span>
+{%- else -%}
+<span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium badge-spark">
+  <svg class="w-3 h-3" viewBox="0 0 16 16" fill="currentColor"><circle cx="8" cy="8" r="4"/></svg>
+  Spark
+</span>
+{%- endif -%}
+{% endmacro %}
+
+{# Experimental label #}
+{% macro experimental_label() %}
+<span class="inline-block px-1.5 py-0.5 rounded text-[0.65rem] font-medium uppercase tracking-wider badge-experimental">EXPERIMENTAL</span>
+{% endmacro %}
+
+{# Gate meter bar #}
+{% macro gate_meter(score, band) %}
+{% set pct = (score * 100)|int if score is not none else 14 %}
+{% set cls = 'meter-' + (band if band else 'pending') %}
+<div class="meter {{ cls }}" role="meter" aria-valuemin="0" aria-valuemax="1" aria-valuenow="{{ score if score is not none else 0 }}">
+  <span style="width: {{ pct }}%"></span>
+</div>
+{% endmacro %}
+
+{# Mini bar for feed strip #}
+{% macro mini_bar(dim) %}
+{% set pct = dim.percent if dim.score is not none else 20 %}
+{% set band = dim.band if dim.band else 'pending' %}
+<div class="mini-bar {{ band }}" title="{{ dim.label }}: {% if dim.score is not none %}{{ '%.2f'|format(dim.score) }}{% else %}pending{% endif %}" aria-label="{{ dim.label }}: {% if dim.score is not none %}{{ '%.2f'|format(dim.score) }}{% else %}pending{% endif %}">
+  <span style="height: {{ pct }}%"></span>
+</div>
+{% endmacro %}
+
+{# Dimension card #}
+{% macro dimension_card(dim) %}
+{% set band = dim.band if dim.band else 'pending' %}
+<div class="rounded-[--radius-md] border border-[--color-border-subtle] bg-[--color-surface-raised] p-3" role="listitem">
+  <div class="flex justify-between items-center gap-2 text-sm">
+    <strong class="text-[--color-ink]">{{ dim.label }}</strong>
+    <span class="font-mono text-xs text-[--color-muted]" aria-label="score">{% if dim.score is not none %}{{ '%.3f'|format(dim.score) }}{% else %}pending{% endif %}</span>
+  </div>
+  {{ gate_meter(dim.score, band) }}
+  <div class="mt-1.5 text-[0.72rem] text-[--color-faint]">{{ dim.reason }}</div>
+</div>
+{% endmacro %}
+
+{# R_V card #}
+{% macro rv_card(rv) %}
+<div class="rounded-[--radius-md] border border-[--color-border-subtle] bg-[--color-experimental-bg] p-3" role="listitem">
+  <div class="flex justify-between items-center gap-2 text-sm">
+    <strong class="text-[--color-experimental]">R_V {{ experimental_label() }}</strong>
+    <span class="font-mono text-xs text-[--color-muted]">{% if rv.score is not none %}{{ '%.3f'|format(rv.score) }}{% else %}N/A{% endif %}</span>
+  </div>
+  {{ gate_meter(rv.score, 'experimental') }}
+  <div class="mt-1.5 text-[0.72rem] text-[--color-faint]">{{ rv.status_text }}</div>
+  <div class="text-[0.72rem] text-[--color-faint] italic">Non-gating: shown for informational purposes only.</div>
+</div>
+{% endmacro %}
+
+{# Witness timeline entry #}
+{% macro timeline_entry(entry) %}
+<div class="timeline-entry {{ 'system' if entry.witness_id == 'system' else '' }}" role="listitem"
+     x-data="{ open: false }">
+  <div class="flex flex-wrap items-center gap-2 text-xs text-[--color-muted]">
+    <span class="font-mono">{{ entry.timestamp[:19] }}</span>
+    <span class="px-1.5 py-0.5 rounded bg-[--color-surface-raised] border border-[--color-border-subtle] font-medium text-[--color-ink]">{{ entry.action }}</span>
+    <span>{{ entry.witness_id[:12] }}{% if entry.witness_id|length > 12 %}...{% endif %}</span>
+  </div>
+  <button @click="open = !open" class="text-xs text-[--color-accent] mt-1 cursor-pointer hover:underline bg-transparent border-none p-0">
+    <span x-text="open ? 'Hide payload' : 'Show payload'">Show payload</span>
+  </button>
+  <div x-show="open" x-transition class="mt-1">
+    <pre class="text-xs">{{ entry.payload | tojson(indent=2) }}</pre>
+  </div>
+  <div class="mt-1 font-mono text-[0.65rem] text-[--color-faint]" title="{{ entry.hash }}">
+    hash={{ entry.hash[:16] }}...
+    <button @click="navigator.clipboard.writeText('{{ entry.hash }}')" class="text-[--color-accent] bg-transparent border-none p-0 cursor-pointer text-[0.65rem] hover:underline">copy</button>
+  </div>
+</div>
+{% endmacro %}
+
+{# Compost WHY card #}
+{% macro compost_why(why) %}
+<div class="rounded-[--radius-md] border border-[--color-border] bg-[--color-compost-bg] p-4">
+  <h3 class="text-sm font-semibold text-[--color-compost] mb-1">{{ why.title }}</h3>
+  <div class="text-xs text-[--color-muted] mb-2">source={{ why.source }}</div>
+  <div class="text-sm text-[--color-ink]">{{ why.reason }}</div>
+  {% if why.rv_note %}
+  <div class="text-xs text-[--color-faint] mt-2 italic">R_V: {{ why.rv_note }}</div>
+  {% endif %}
+</div>
+{% endmacro %}

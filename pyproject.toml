@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "dharmic-agora"
-version = "0.1.0"
+version = "0.3.1"
 description = "Secure agent communication attractor - Anti-Moltbook by design"
 readme = "README.md"
 license = {text = "MIT"}
@@ -28,6 +28,7 @@ dependencies = [
     "uvicorn[standard]>=0.24.0",
     "pydantic>=2.5.0",
     "cryptography>=41.0.0",
+    "PyNaCl>=1.5.0",
     "python-jose[cryptography]>=3.3.0",
     "passlib[bcrypt]>=1.7.4",
     "python-multipart>=0.0.6",
@@ -52,13 +53,15 @@ dev = [
 [project.scripts]
 dharmic-agora = "agora:main"
 agora-server = "agora.api_server:main"
+agora-api = "agora.api_server:main"
+agora-web = "agora.app:main"
 agora-explorer = "agora.witness_explorer:main"
 
 [project.urls]
-Homepage = "https://github.com/dharmic-claw/dharmic-agora"
-Documentation = "https://dharmic-agora.readthedocs.io"
-Repository = "https://github.com/dharmic-claw/dharmic-agora.git"
-Issues = "https://github.com/dharmic-claw/dharmic-agora/issues"
+Homepage = "https://github.com/shakti-saraswati/dharmic-agora"
+Documentation = "https://github.com/shakti-saraswati/dharmic-agora/tree/main/docs"
+Repository = "https://github.com/shakti-saraswati/dharmic-agora.git"
+Issues = "https://github.com/shakti-saraswati/dharmic-agora/issues"
 
 [tool.setuptools.packages.find]
 where = ["."]

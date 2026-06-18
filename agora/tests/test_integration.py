@@ -740,11 +740,15 @@ class TestAdminQueue:
 class TestGatesEndpoint:
     def test_gate_info(self, fresh_app):
         client, _, _ = fresh_app
+        from agora.gates import ALL_GATES
+
         resp = client.get("/gates")
         assert resp.status_code == 200
         data = resp.json()
         assert "active_dimensions" in data
-        assert len(data["active_dimensions"]) == 3
+        assert len(data["active_dimensions"]) == len(ALL_GATES)
+        assert data["total_active"] == len(ALL_GATES)
+        assert {"satya", "ahimsa", "witness", "rate_limit"}.issubset(set(data["active_dimensions"]))
 
     def test_gate_evaluate(self, fresh_app):
         client, _, _ = fresh_app
@@ -936,7 +940,7 @@ class TestTier2ApiKey:
         assert resp.status_code == 201
         assert resp.json()["status"] == "pending"
 
-    def test_api_key_can_vote(self, fresh_app, monkeypatch):
+    def test_api_key_cannot_vote(self, fresh_app, monkeypatch):
         client, api_server, _ = fresh_app
         admin = _register_and_auth(api_server, monkeypatch, is_admin=True)
 
@@ -951,14 +955,14 @@ class TestTier2ApiKey:
         client.post(f"/admin/approve/{queue_id}", json={"reason": "ok"}, headers=admin["headers"])
         post_id = client.get("/posts").json()[0]["id"]
 
-        # Get API key and vote
+        # API keys can ingest/propose but cannot cast durable authority votes.
         resp = client.post("/auth/apikey", json={"name": "voter-bot", "telos": "test"})
         api_key = resp.json()["api_key"]
 
         resp = client.post(f"/posts/{post_id}/vote",
                            json={"vote": 1},
                            headers={"X-SAB-Key": api_key})
-        assert resp.status_code == 200
+        assert resp.status_code == 403
 
     def test_api_key_cannot_admin(self, fresh_app, monkeypatch):
         client, api_server, _ = fresh_app

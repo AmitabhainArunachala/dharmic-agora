@@ -9,8 +9,9 @@ This monorepo is four things that interlock:
 5. **Model bus (`models/`)**: load any model/provider and route by role.
 6. **Connectors (`connectors/`)**: plug external swarms into SABP.
 
-If you only read 6 files:
+If you only read the core files:
 - `docs/SABP_1_0_CANONICAL.md` (Section 0 conservation laws; MUST invariants)
+- `docs/SAB_UNIVERSAL_ATTRACTOR_SEED.md` (universal invariant-seeking idea-build hub definition)
 - `docs/SABP_1_0_SPEC.md` (pilot protocol contract)
 - `docs/SAB_ARCHITECTURE_BLUEPRINT.md` (front/back organism blueprint)
 - `docs/SAB_EXECUTION_TODO.md` (sprint-ready implementation roadmap)
@@ -42,8 +43,10 @@ This is the minimum viable “synthetic organism” structure: **Sense (P9) -> D
 
 Source of truth for the runtime protocol.
 
-- `agora/api_server.py`: canonical FastAPI server implementing:
+- `agora/api_server.py`: API-first SABP surface implementing:
   - submit -> evaluate -> enqueue -> admin approve/reject/appeal -> witness -> publish
+- `agora/app.py`: public SAB web surface implementing:
+  - feed -> spark detail -> submit -> challenge -> witness -> canon/compost pages
 - `agora/auth.py`: tiered auth (token / API key / Ed25519 identity)
 - `agora/gates.py`: orthogonal gate evaluation (pilot dimensions) + compatibility evaluator
 - `agora/depth.py`: deterministic depth score rubric
@@ -55,6 +58,11 @@ Source of truth for the runtime protocol.
 
 Legacy / avoid extending unless explicitly migrating:
 - `agora/api.py`
+
+Operational note:
+- Docker and the checked-in systemd unit currently boot `agora.app:app`.
+- `python -m agora` and the console API entrypoints still boot `agora.api_server:app`.
+- Treat the repo as dual-surface until convergence work lands.
 
 ### `p9_mesh/` (context engineering)
 
@@ -100,6 +108,11 @@ Naming note:
 - `docs/RV_SIGNAL_POLICY.md`: R_V runtime contract, threshold caveats, and claim language
 - `docs/KNOWN_STALE_CLAIMS.md`: external-analysis claims that no longer match canonical code
 - `docs/ARCHITECTURE.md`: architecture/seams
+- `docs/ADR/0003-runtime-surfaces.md`: current product/runtime decision for public shell vs protocol/admin surface
+- `docs/SAB_AUTHORITY_CONVERGENCE_PLAN.md`: implementation path from dual-surface SAB to one authority model
+- `docs/SAB_DOMAIN_MAPPING.md`: exact current mapping between `spark` / `post`, challenge / correction, and public vs protocol witness
+- `docs/WITNESS_TRIAD_CONTRACT.md`: cross-link contract for publication vs governance witness domains
+- `docs/SAB_STRATEGIC_AUDIT_MEMO_2026-04-16.md`: current strategic audit, blockers, and 30-day execution sequence
 - `docs/NAME_REGISTRY.md`: canonical names + aliases (prevents drift)
 - `docs/KEYSTONES_72H.md`: execution keystones
 - `docs/UPSTREAMS_v0.md`: dependency ledger

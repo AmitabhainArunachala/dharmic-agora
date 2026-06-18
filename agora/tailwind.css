@@ -1,0 +1,372 @@
+@import "tailwindcss";
+
+/* ── SAB Design System ── */
+
+@theme {
+  /* Light palette (default) */
+  --color-bg: #f4f3ef;
+  --color-surface: #fffdf6;
+  --color-surface-raised: #ffffff;
+  --color-ink: #1e1d1a;
+  --color-muted: #6f6a5f;
+  --color-faint: #a8a298;
+  --color-border: #d8d1c0;
+  --color-border-subtle: #e8e3d8;
+
+  --color-accent: #114e8a;
+  --color-accent-soft: #e8f4ff;
+  --color-accent-hover: #0d3d6e;
+
+  --color-gate-pass: #2f7d32;
+  --color-gate-pass-bg: #e8f5e9;
+  --color-gate-warn: #b28800;
+  --color-gate-warn-bg: #fff8e1;
+  --color-gate-fail: #b02828;
+  --color-gate-fail-bg: #fce4ec;
+  --color-gate-pending: #8f8b81;
+  --color-gate-pending-bg: #f0ede6;
+
+  --color-experimental: #5c3d99;
+  --color-experimental-bg: #ede5f7;
+
+  --color-canon: #1b5e20;
+  --color-canon-bg: #e0f2e1;
+  --color-compost: #6d4c41;
+  --color-compost-bg: #efebe9;
+  --color-spark: #0d47a1;
+  --color-spark-bg: #e3f2fd;
+
+  /* Typography */
+  --font-heading: 'Space Grotesk', 'Avenir Next', 'Segoe UI', sans-serif;
+  --font-body: 'Space Grotesk', 'Avenir Next', 'Segoe UI', sans-serif;
+  --font-prose: 'Spectral', 'Palatino Linotype', 'Book Antiqua', Palatino, serif;
+  --font-mono: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  /* Spacing rhythm */
+  --space-xs: 0.25rem;
+  --space-sm: 0.5rem;
+  --space-md: 1rem;
+  --space-lg: 1.5rem;
+  --space-xl: 2rem;
+  --space-2xl: 3rem;
+
+  /* Radius */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-full: 999px;
+
+  /* Shadows */
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.06);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.08);
+  --shadow-lg: 0 12px 32px rgba(0, 0, 0, 0.1);
+}
+
+/* ── Dark mode overrides ── */
+
+.dark {
+  --color-bg: #0b111f;
+  --color-surface: #131d33;
+  --color-surface-raised: #1a2744;
+  --color-ink: #f1efea;
+  --color-muted: #c8c5bc;
+  --color-faint: #7a7568;
+  --color-border: #30405f;
+  --color-border-subtle: #243352;
+
+  --color-accent: #76b8ba;
+  --color-accent-soft: #162a3a;
+  --color-accent-hover: #93d1d3;
+
+  --color-gate-pass: #66bb6a;
+  --color-gate-pass-bg: #1b3a1e;
+  --color-gate-warn: #ffd54f;
+  --color-gate-warn-bg: #3a3014;
+  --color-gate-fail: #ef5350;
+  --color-gate-fail-bg: #3a1616;
+  --color-gate-pending: #9e9a90;
+  --color-gate-pending-bg: #232029;
+
+  --color-experimental: #b388ff;
+  --color-experimental-bg: #251a3a;
+
+  --color-canon: #66bb6a;
+  --color-canon-bg: #1b3a1e;
+  --color-compost: #a1887f;
+  --color-compost-bg: #2e221c;
+  --color-spark: #64b5f6;
+  --color-spark-bg: #152740;
+
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.4);
+  --shadow-lg: 0 12px 32px rgba(0, 0, 0, 0.5);
+}
+
+/* ── Base ── */
+
+@layer base {
+  * { box-sizing: border-box; }
+
+  html {
+    scroll-behavior: smooth;
+  }
+
+  body {
+    margin: 0;
+    background: var(--color-bg);
+    color: var(--color-ink);
+    font-family: var(--font-body);
+    line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+    transition: background-color 200ms ease, color 200ms ease;
+  }
+
+  a { color: var(--color-accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+
+  h1, h2, h3, h4 {
+    font-family: var(--font-heading);
+    font-weight: 600;
+    line-height: 1.2;
+    margin: 0;
+  }
+
+  code, pre {
+    font-family: var(--font-mono);
+    font-size: 0.84rem;
+  }
+
+  pre {
+    overflow-x: auto;
+    background: var(--color-surface-raised);
+    border: 1px solid var(--color-border-subtle);
+    border-radius: var(--radius-md);
+    padding: 0.75rem 1rem;
+  }
+
+  ::selection {
+    background: var(--color-accent);
+    color: #fff;
+  }
+}
+
+/* ── Skip link ── */
+
+.skip-link {
+  position: absolute;
+  top: -100%;
+  left: 8px;
+  background: var(--color-accent);
+  color: #fff;
+  padding: 6px 14px;
+  border-radius: 0 0 var(--radius-sm) var(--radius-sm);
+  z-index: 100;
+  font-size: 0.9rem;
+}
+.skip-link:focus { top: 0; }
+
+/* ── Focus ── */
+
+a:focus-visible,
+button:focus-visible,
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+/* ── Status badges ── */
+
+.badge-spark {
+  background: var(--color-spark-bg);
+  color: var(--color-spark);
+  border: 1px solid color-mix(in srgb, var(--color-spark) 25%, transparent);
+}
+.badge-canon {
+  background: var(--color-canon-bg);
+  color: var(--color-canon);
+  border: 1px solid color-mix(in srgb, var(--color-canon) 25%, transparent);
+}
+.badge-compost {
+  background: var(--color-compost-bg);
+  color: var(--color-compost);
+  border: 1px solid color-mix(in srgb, var(--color-compost) 25%, transparent);
+}
+.badge-experimental {
+  background: var(--color-experimental-bg);
+  color: var(--color-experimental);
+  border: 1px solid color-mix(in srgb, var(--color-experimental) 25%, transparent);
+}
+
+/* ── Gate meter ── */
+
+.meter {
+  height: 8px;
+  border-radius: var(--radius-full);
+  background: var(--color-border-subtle);
+  overflow: hidden;
+}
+.meter > span {
+  display: block;
+  height: 100%;
+  border-radius: var(--radius-full);
+  transition: width 400ms ease;
+}
+.meter-pass > span { background: var(--color-gate-pass); }
+.meter-warn > span { background: var(--color-gate-warn); }
+.meter-fail > span { background: var(--color-gate-fail); }
+.meter-pending > span { background: var(--color-gate-pending); }
+.meter-experimental > span { background: var(--color-experimental); }
+
+/* ── Mini bar strip (feed thumbnails) ── */
+
+.mini-strip {
+  display: grid;
+  grid-template-columns: repeat(18, minmax(6px, 1fr));
+  gap: 3px;
+}
+.mini-bar {
+  height: 28px;
+  border-radius: 3px;
+  background: var(--color-border-subtle);
+  position: relative;
+  overflow: hidden;
+}
+.mini-bar > span {
+  position: absolute;
+  left: 0; right: 0; bottom: 0;
+  border-radius: 3px 3px 0 0;
+}
+.mini-bar.pass > span { background: var(--color-gate-pass); }
+.mini-bar.warn > span { background: var(--color-gate-warn); }
+.mini-bar.fail > span { background: var(--color-gate-fail); }
+.mini-bar.pending > span { background: var(--color-gate-pending); }
+.mini-bar.experimental > span { background: var(--color-experimental); }
+
+/* ── Witness timeline ── */
+
+.timeline {
+  position: relative;
+  padding-left: 24px;
+}
+.timeline::before {
+  content: '';
+  position: absolute;
+  left: 8px;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: var(--color-border);
+}
+.timeline-entry {
+  position: relative;
+  padding-bottom: 1.25rem;
+}
+.timeline-entry::before {
+  content: '';
+  position: absolute;
+  left: -20px;
+  top: 6px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--color-accent);
+  border: 2px solid var(--color-surface);
+}
+.timeline-entry.system::before {
+  background: var(--color-muted);
+}
+
+/* ── Radar chart container ── */
+
+.radar-container {
+  max-width: 360px;
+  margin: 0 auto;
+}
+.radar-container canvas {
+  width: 100% !important;
+  height: auto !important;
+}
+
+/* ── Dimension grid ── */
+
+.dimension-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 0.5rem;
+}
+
+/* ── Chain verification indicator ── */
+
+.chain-verified {
+  color: var(--color-gate-pass);
+}
+.chain-broken {
+  color: var(--color-gate-fail);
+}
+
+/* ── Prose content (about page, spark detail) ── */
+
+.prose {
+  font-family: var(--font-prose);
+  font-size: 1.05rem;
+  line-height: 1.7;
+  max-width: 68ch;
+}
+.prose p { margin: 0 0 1rem; }
+.prose h2 { margin: 1.5rem 0 0.75rem; font-family: var(--font-heading); }
+.prose h3 { margin: 1.25rem 0 0.5rem; font-family: var(--font-heading); }
+.prose ul, .prose ol { padding-left: 1.5rem; margin: 0 0 1rem; }
+.prose li { margin-bottom: 0.25rem; }
+
+/* ── Print ── */
+
+@media print {
+  body { background: #fff; color: #000; }
+  .site-header, .skip-link, button, .toolbar, form, .dark-toggle { display: none; }
+  .panel { border: 1px solid #ccc; break-inside: avoid; }
+  a { color: #000; text-decoration: underline; }
+  a::after { content: ' (' attr(href) ')'; font-size: 0.8em; color: #666; }
+  .timeline::before { background: #999; }
+  .timeline-entry::before { background: #999; border-color: #fff; }
+}
+
+/* ── Scroll-driven reveal (progressive enhancement) ── */
+
+@supports (animation-timeline: view()) {
+  .reveal {
+    opacity: 0;
+    transform: translateY(12px);
+    animation: sab-reveal linear both;
+    animation-timeline: view();
+    animation-range: entry 0% entry 30%;
+  }
+  @keyframes sab-reveal {
+    to { opacity: 1; transform: translateY(0); }
+  }
+}
+
+/* ── HTMX loading indicator ── */
+
+.htmx-indicator {
+  display: none;
+}
+.htmx-request .htmx-indicator,
+.htmx-request.htmx-indicator {
+  display: inline-block;
+}
+
+/* ── Responsive ── */
+
+@media (max-width: 768px) {
+  .mini-strip {
+    grid-template-columns: repeat(9, minmax(6px, 1fr));
+  }
+  .dimension-grid {
+    grid-template-columns: 1fr;
+  }
+  .radar-container {
+    max-width: 280px;
+  }
+}
