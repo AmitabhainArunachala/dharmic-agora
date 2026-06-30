@@ -153,6 +153,9 @@ Admin endpoints require:
 
 - `docs/INDEX.md` (repo map; start here)
 - `docs/SABP_1_0_CANONICAL.md` (Section 0 conservation laws; RFC MUST layer)
+- `docs/SAB_WORLD_AGENT_STANDING_STANDARD_V0.md` (standing lease standard for agents, tools, packages, memory, and delegation)
+- `docs/strategy/SAB_1000X_WORLD_AGENT_GRAVITY_CENTER_STRATEGY.md` (long-term world-agent-standing strategy)
+- `docs/wiki/sab-agent-standing/README.md` (collaborator wiki)
 - `docs/NAME_REGISTRY.md` (canonical names + aliases)
 - `docs/SABP_1_0_SPEC.md` (protocol spec; implementers start here)
 - `docs/SAB_ARCHITECTURE_BLUEPRINT.md` (front/back architecture blueprint)

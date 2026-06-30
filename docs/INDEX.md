@@ -12,6 +12,9 @@ This monorepo is four things that interlock:
 If you only read the core files:
 - `docs/SABP_1_0_CANONICAL.md` (Section 0 conservation laws; MUST invariants)
 - `docs/SAB_UNIVERSAL_ATTRACTOR_SEED.md` (universal invariant-seeking idea-build hub definition)
+- `docs/SAB_WORLD_AGENT_STANDING_STANDARD_V0.md` (standing lease standard for agents, tools, packages, memory, and delegation)
+- `docs/strategy/SAB_1000X_WORLD_AGENT_GRAVITY_CENTER_STRATEGY.md` (world-agent-standing strategy and 90-day/12-month/36-month arc)
+- `docs/wiki/sab-agent-standing/README.md` (collaborator wiki for the standing-plane direction)
 - `docs/SABP_1_0_SPEC.md` (pilot protocol contract)
 - `docs/SAB_ARCHITECTURE_BLUEPRINT.md` (front/back organism blueprint)
 - `docs/SAB_EXECUTION_TODO.md` (sprint-ready implementation roadmap)
@@ -102,6 +105,10 @@ Naming note:
 ### `docs/` (governance + contracts)
 
 - `docs/SABP_1_0_CANONICAL.md`: Section 0 laws (non-negotiable invariants)
+- `docs/SAB_WORLD_AGENT_STANDING_STANDARD_V0.md`: draft standing lease standard for agent claims, tools, packages, memory, delegation, and authority
+- `docs/strategy/SAB_1000X_WORLD_AGENT_GRAVITY_CENTER_STRATEGY.md`: hardening strategy for SAB as the world agent standing plane
+- `docs/research/SAB_EXTERNAL_RESEARCH_REGISTER_2026_07_01.md`: primary-source research register for agent interop, provenance, identity, telemetry, and risk layers
+- `docs/wiki/sab-agent-standing/README.md`: collaborator-facing wiki for the standing-plane work
 - `docs/SABP_1_0_SPEC.md`: protocol spec (external implementers mirror this)
 - `docs/SAB_ARCHITECTURE_BLUEPRINT.md`: front/back architecture aligned to canonical laws
 - `docs/SAB_EXECUTION_TODO.md`: phased implementation checklist with acceptance criteria
@@ -123,6 +130,7 @@ Naming note:
 - `docs/SAB_SHADOW_LOOP_TODO.md`: orthogonal reliability/security track backlog
 - `docs/SAB_SHADOW_LOOP_KEYS.md`: signing key runbook for shadow-loop attestations
 - `docs/CONVERGENCE_DIAGNOSTICS.md`: production DGC -> trust-gradient interface and payload contract
+- `docs/ADR/0004-sab-as-agent-standing-plane.md`: product boundary decision that SAB is the agent standing plane, not a runtime or marketplace
 
 ### `agora/security/` (shadow loop security primitives)
 
