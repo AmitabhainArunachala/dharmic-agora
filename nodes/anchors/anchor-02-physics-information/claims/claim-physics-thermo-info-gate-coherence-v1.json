@@ -37,6 +37,7 @@
   ],
   "replaces_prior_frame": false,
   "requested_stage": "paper_internal_draft",
+  "scope": "Internal paper-stage claim about information-theoretic constraints on gate coherence under recursive updates.",
   "status": "witnessed",
   "summary": "Test whether gate scores and witness convergence obey stable information-theoretic bounds under recursive updates.",
   "threshold_completed_at": "2026-02-03T14:07:55.066376+00:00",

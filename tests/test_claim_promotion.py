@@ -26,6 +26,7 @@ def _base_claim(stage: str) -> dict:
         "node_id": "anchor-03-ml-intelligence-engineering",
         "node_coordinate": "Node_03",
         "title": "Depth concentration hypothesis",
+        "scope": "A scoped claim packet used for promotion enforcement tests.",
         "lane": "papers",
         "status": "witnessed",
         "proposal_hash": "a" * 32,
@@ -110,3 +111,15 @@ def test_require_stage_fails_claim_without_requested_stage(tmp_path: Path) -> No
     report = run_promotion_enforcement(nodes_root=tmp_path / "nodes", require_stage=True, now=NOW)
     assert report.passed is False
     assert any("missing requested_stage" in f.get("error", "") for f in report.failures)
+
+
+def test_requested_stage_fails_when_scope_missing(tmp_path: Path) -> None:
+    claim = _base_claim("paper_internal_draft")
+    claim.pop("scope", None)
+    _write_claim(
+        tmp_path / "nodes/anchors/anchor-03-ml-intelligence-engineering/claims/claim-4.json",
+        claim,
+    )
+    report = run_promotion_enforcement(nodes_root=tmp_path / "nodes", now=NOW)
+    assert report.passed is False
+    assert any("missing scope" in f.get("error", "") for f in report.failures)

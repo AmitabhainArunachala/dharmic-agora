@@ -128,6 +128,10 @@ def check_navigation(errors: list[str]) -> None:
 
 
 def check_schemas(errors: list[str]) -> None:
+    claim_schema = _load_json("nodes/schemas/claim.packet.schema.json")
+    if "scope" not in set(claim_schema.get("required", [])):
+        errors.append("claim.packet schema does not require scope")
+
     handoff_schema = _load_json("nodes/schemas/a2a.handoff.schema.json")
     role_enum = set(handoff_schema["properties"]["role"]["enum"])
     if role_enum != ROLES:
@@ -204,6 +208,13 @@ def check_seed_templates(errors: list[str]) -> None:
         errors.append(f"seed templates mismatch: expected {sorted(SEED_TYPES)}, saw {sorted(seen)}")
 
 
+def check_existing_claim_packets(errors: list[str]) -> None:
+    for path in sorted((REPO_ROOT / "nodes" / "anchors").glob("*/claims/*.json")):
+        packet = _load_json(path)
+        if not str(packet.get("scope", "")).strip():
+            errors.append(f"{path.relative_to(REPO_ROOT)} claim packet missing scope")
+
+
 def check_ui(errors: list[str]) -> None:
     _append_missing(
         errors,
@@ -221,6 +232,7 @@ def run_checks() -> list[str]:
     check_docs(errors)
     check_navigation(errors)
     check_schemas(errors)
+    check_existing_claim_packets(errors)
     check_seed_templates(errors)
     check_ui(errors)
     return errors

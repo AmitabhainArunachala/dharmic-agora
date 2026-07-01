@@ -390,6 +390,7 @@ def main() -> int:
     parser.add_argument("--claim-id", default="", help="Unique claim id (auto-generated when omitted)")
     parser.add_argument("--title", required=True, help="Claim title")
     parser.add_argument("--summary", default="", help="Optional claim summary")
+    parser.add_argument("--scope", default="", help="Exact scope boundary for the claim")
     parser.add_argument(
         "--stage",
         default=STAGE_PAPER_INTERNAL,
@@ -490,6 +491,7 @@ def main() -> int:
         "node_id": args.node,
         "node_coordinate": node_coordinate,
         "title": args.title,
+        "scope": args.scope.strip() or f"Scoped claim packet for {args.title}.",
         "lane": lane,
         "status": "witnessed",
         "proposal_hash": proposal_hash,

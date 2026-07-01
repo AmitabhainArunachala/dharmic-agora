@@ -145,6 +145,9 @@ def run_promotion_enforcement(
 
         claims_with_stage_requests += 1
         claim_id = str(claim.get("claim_id", ""))
+        if not str(claim.get("scope", "")).strip():
+            failures.append({"file": str(path), "claim_id": claim_id, "error": "missing scope"})
+            continue
 
         for stage in requested_stages:
             stage_evaluations += 1

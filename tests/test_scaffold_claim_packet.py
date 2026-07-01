@@ -19,6 +19,8 @@ def test_scaffold_claim_packet_dry_run_succeeds() -> None:
         "claim-test-dry-run-scaffold-v1",
         "--title",
         "Dry run scaffold claim",
+        "--scope",
+        "Dry-run claim scope.",
         "--stage",
         "paper_internal_draft",
         "--dry-run",
