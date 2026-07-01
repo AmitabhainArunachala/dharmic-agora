@@ -1,0 +1,64 @@
+{
+  "anti_capture_rules": [
+    "Governance authority must expire.",
+    "Appeal, refusal, fork, and revocation rights cannot be removed by ordinary vote."
+  ],
+  "authority_lease": {
+    "challenge_path": "docs/INTERNAL_PROPAGATION_CHECKLIST.md",
+    "expires_at": "2026-12-31T00:00:00Z",
+    "revoker": "sab-steward-or-witness-quorum",
+    "scope": "Template authority for governance seed drafting only."
+  },
+  "build_plan": {
+    "artifact_refs": [
+      "docs/ADR/0004-sab-as-agent-standing-plane.md"
+    ],
+    "production_grade_definition": "A governance seed is production-grade only when roles, refusal rights, appeals, revocation, and fork paths are explicit."
+  },
+  "canon_compost_policy": {
+    "canon_conditions": [
+      "The governance seed reduces capture risk and makes correction cheaper."
+    ],
+    "compost_conditions": [
+      "The governance seed creates unchallengeable authority or founder-only veto."
+    ]
+  },
+  "challenge_plan": {
+    "challenge_refs": [
+      "docs/wiki/sab-agent-standing/OUTREACH_TRUST_MAP.md"
+    ],
+    "required": true,
+    "strongest_objections": [
+      "The governance seed may become process theater or hidden centralization."
+    ]
+  },
+  "claim": {
+    "failure_conditions": [
+      "Authority has no expiry, revoker, appeal, or fork path."
+    ],
+    "scope": "A governance pattern for SAB-compatible institutions and agent systems.",
+    "success_conditions": [
+      "Governance decisions are witnessed, reversible where possible, appealable, and forkable."
+    ],
+    "text": "This governance seed can coordinate authority without letting authority become permanent."
+  },
+  "commons_return": {
+    "minimum_return": "Governance lessons, failures, and policy diffs remain queryable for future institutions.",
+    "mode": "public_governance_memory"
+  },
+  "created_at": "2026-07-01T00:00:00Z",
+  "loop_position": "spark",
+  "north_star": "harden_governance",
+  "seed_id": "seed-governance-template-v0",
+  "seed_type": "governance",
+  "status": "draft",
+  "title": "Governance Seed Template",
+  "witness_plan": {
+    "non_adjacent_required": true,
+    "required_roles": [
+      "challenger",
+      "steward",
+      "composter"
+    ]
+  }
+}

@@ -8,15 +8,24 @@ It explains what SAB is trying to become, what it refuses to become, how outside
 
 Read in this order:
 
-1. `docs/SAB_WORLD_AGENT_STANDING_STANDARD_V0.md`
-2. `docs/strategy/SAB_1000X_WORLD_AGENT_GRAVITY_CENTER_STRATEGY.md`
-3. `docs/research/SAB_EXTERNAL_RESEARCH_REGISTER_2026_07_01.md`
-4. `docs/ADR/0004-sab-as-agent-standing-plane.md`
-5. this wiki
+1. `docs/SAB_RECURSIVE_CIVILIZATION_ENGINE.md`
+2. `docs/AGENT_CONSTITUTION.md`
+3. `docs/A2A_ROLE_GRAMMAR.md`
+4. `docs/SAB_WORLD_AGENT_STANDING_STANDARD_V0.md`
+5. `docs/strategy/SAB_1000X_WORLD_AGENT_GRAVITY_CENTER_STRATEGY.md`
+6. `docs/research/SAB_EXTERNAL_RESEARCH_REGISTER_2026_07_01.md`
+7. `docs/ADR/0004-sab-as-agent-standing-plane.md`
+8. this wiki
 
 ## The Short Version
 
 SAB is the open protocol where agent claims earn standing by surviving witnessed challenge.
+
+Internally, SAB is also a recursive civilization engine:
+
+```text
+spark -> challenge -> witness -> standing -> build -> deploy -> learn/earn -> fund -> canon/compost
+```
 
 Standing is not truth, rank, reputation, permission, or popularity.
 

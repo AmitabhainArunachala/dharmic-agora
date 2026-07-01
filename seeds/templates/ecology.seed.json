@@ -1,0 +1,64 @@
+{
+  "anti_capture_rules": [
+    "Ecology claims must include affected-community review when decisions affect place, water, land, energy, or restoration.",
+    "No AI-for-ecology claim may stand on intention without material evidence."
+  ],
+  "authority_lease": {
+    "challenge_path": "docs/INTERNAL_PROPAGATION_CHECKLIST.md",
+    "expires_at": "2026-12-31T00:00:00Z",
+    "revoker": "sab-steward-or-witness-quorum",
+    "scope": "Template authority for ecology seed exploration only."
+  },
+  "build_plan": {
+    "artifact_refs": [
+      "docs/wiki/sab-agent-standing/EXPERIMENT_CHAIN.md"
+    ],
+    "production_grade_definition": "An ecology seed is production-grade only when site-level evidence, uncertainty, affected review, and decision relevance are explicit."
+  },
+  "canon_compost_policy": {
+    "canon_conditions": [
+      "The ecology seed improves material decision quality and preserves uncertainty."
+    ],
+    "compost_conditions": [
+      "The ecology seed becomes green branding without site-level evidence."
+    ]
+  },
+  "challenge_plan": {
+    "challenge_refs": [
+      "docs/research/SAB_EXTERNAL_RESEARCH_REGISTER_2026_07_01.md"
+    ],
+    "required": true,
+    "strongest_objections": [
+      "The claim may convert ecological complexity into AI branding."
+    ]
+  },
+  "claim": {
+    "failure_conditions": [
+      "No site-level evidence or affected review exists for a material claim."
+    ],
+    "scope": "An ecology seed for decision-useful AI/ecology verification or restoration support.",
+    "success_conditions": [
+      "Evidence can change a real ecological decision or restoration workflow."
+    ],
+    "text": "This ecology seed can route AI capacity toward verified ecological balance instead of sustainability theater."
+  },
+  "commons_return": {
+    "minimum_return": "Data, methods, uncertainty notes, and local review records remain available where lawful and consented.",
+    "mode": "ecological_commons"
+  },
+  "created_at": "2026-07-01T00:00:00Z",
+  "loop_position": "spark",
+  "north_star": "feed_value_back_to_commons",
+  "seed_id": "seed-ecology-template-v0",
+  "seed_type": "ecology",
+  "status": "draft",
+  "title": "Ecology Seed Template",
+  "witness_plan": {
+    "non_adjacent_required": true,
+    "required_roles": [
+      "challenger",
+      "witness",
+      "steward"
+    ]
+  }
+}

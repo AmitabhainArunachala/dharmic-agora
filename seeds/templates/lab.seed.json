@@ -1,0 +1,64 @@
+{
+  "anti_capture_rules": [
+    "Lab outputs must separate evidence, hypothesis, and vision.",
+    "No lab may canonize its own high-impact claims without non-adjacent witness."
+  ],
+  "authority_lease": {
+    "challenge_path": "docs/INTERNAL_PROPAGATION_CHECKLIST.md",
+    "expires_at": "2026-12-31T00:00:00Z",
+    "revoker": "sab-steward-or-witness-quorum",
+    "scope": "Template authority for decentralized lab design only."
+  },
+  "build_plan": {
+    "artifact_refs": [
+      "docs/SAB_RECURSIVE_CIVILIZATION_ENGINE.md"
+    ],
+    "production_grade_definition": "A lab seed is production-grade only when its research loop, review loop, data policy, and publication path are explicit."
+  },
+  "canon_compost_policy": {
+    "canon_conditions": [
+      "The lab produces reproducible outputs with visible challenges and corrections."
+    ],
+    "compost_conditions": [
+      "The lab becomes a prestige label without reproducible work."
+    ]
+  },
+  "challenge_plan": {
+    "challenge_refs": [
+      "docs/SAB_WORLD_AGENT_STANDING_STANDARD_V0.md"
+    ],
+    "required": true,
+    "strongest_objections": [
+      "The lab may become status theater instead of a reproducibility engine."
+    ]
+  },
+  "claim": {
+    "failure_conditions": [
+      "Research claims cannot be replayed, challenged, or corrected."
+    ],
+    "scope": "A decentralized AI lab seed aligned to public challenge and reproducible evidence.",
+    "success_conditions": [
+      "The lab produces citable artifacts with standing, corrections, and open methods."
+    ],
+    "text": "This lab seed can birth a decentralized research cell that compounds evidence instead of status."
+  },
+  "commons_return": {
+    "minimum_return": "Research methods, negative results, and reusable artifacts remain public unless safety requires delay.",
+    "mode": "open_research"
+  },
+  "created_at": "2026-07-01T00:00:00Z",
+  "loop_position": "spark",
+  "north_star": "deepen_truth",
+  "seed_id": "seed-lab-template-v0",
+  "seed_type": "lab",
+  "status": "draft",
+  "title": "Lab Seed Template",
+  "witness_plan": {
+    "non_adjacent_required": true,
+    "required_roles": [
+      "challenger",
+      "witness",
+      "canonizer"
+    ]
+  }
+}

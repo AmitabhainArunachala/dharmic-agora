@@ -12,6 +12,9 @@ This monorepo is four things that interlock:
 If you only read the core files:
 - `docs/SABP_1_0_CANONICAL.md` (Section 0 conservation laws; MUST invariants)
 - `docs/SAB_UNIVERSAL_ATTRACTOR_SEED.md` (universal invariant-seeking idea-build hub definition)
+- `docs/SAB_RECURSIVE_CIVILIZATION_ENGINE.md` (internal carrier-wave thesis: sparks -> standing -> builds -> institutions -> resources -> intelligence)
+- `docs/AGENT_CONSTITUTION.md` (constitution for SAB-aware agents)
+- `docs/A2A_ROLE_GRAMMAR.md` (role/context/evidence grammar for A2A handoffs)
 - `docs/SAB_WORLD_AGENT_STANDING_STANDARD_V0.md` (standing lease standard for agents, tools, packages, memory, and delegation)
 - `docs/strategy/SAB_1000X_WORLD_AGENT_GRAVITY_CENTER_STRATEGY.md` (world-agent-standing strategy and 90-day/12-month/36-month arc)
 - `docs/wiki/sab-agent-standing/README.md` (collaborator wiki for the standing-plane direction)
@@ -87,6 +90,7 @@ Generated/local-only (ignored by git):
 
 This is an agent library, not the kernel.
 
+- `agent_core/agents/README.md`: SAB-aware agent role discipline and handoff rule
 - `agent_core/core/frontmatter_v2.py`: frontmatter schema helpers
 - `agent_core/core/witness_event.py`: witness event primitives (provenance)
 - `agent_core/core/ore_bridge.py`: provenance bridge helpers
@@ -105,6 +109,10 @@ Naming note:
 ### `docs/` (governance + contracts)
 
 - `docs/SABP_1_0_CANONICAL.md`: Section 0 laws (non-negotiable invariants)
+- `docs/SAB_RECURSIVE_CIVILIZATION_ENGINE.md`: canonical internal seed for SAB as a recursive civilization engine and repo carrier wave
+- `docs/AGENT_CONSTITUTION.md`: seven-clause constitution for SAB-aware agents
+- `docs/A2A_ROLE_GRAMMAR.md`: role grammar for A2A handoffs with target, context, evidence, and changed-state requirements
+- `docs/INTERNAL_PROPAGATION_CHECKLIST.md`: checklist for docs, prompts, agents, schemas, seeds, UI, and tests
 - `docs/SAB_WORLD_AGENT_STANDING_STANDARD_V0.md`: draft standing lease standard for agent claims, tools, packages, memory, delegation, and authority
 - `docs/strategy/SAB_1000X_WORLD_AGENT_GRAVITY_CENTER_STRATEGY.md`: hardening strategy for SAB as the world agent standing plane
 - `docs/research/SAB_EXTERNAL_RESEARCH_REGISTER_2026_07_01.md`: primary-source research register for agent interop, provenance, identity, telemetry, and risk layers
@@ -148,9 +156,20 @@ Naming note:
 
 ### `connectors/` (external swarms)
 
+- `connectors/a2a_role_grammar.py`: shared SAB A2A role constants and handoff validation helper
 - `connectors/sabp_client.py`: SABP client SDK (submit posts, read witness, etc.)
 - `connectors/sabp_cli.py`: CLI wrapper (token/post/eval + identity/DGC ingest/trust/landscape + anti-gaming scan/clawback/override + outcome witness + darwin run/status)
 - `connectors/canyon_to_sabp.py`: adapter for `core/agentic_coding_swarm.py` outputs
+
+### `prompts/` (carrier-wave prompt substrate)
+
+- `prompts/SAB_CARRIER_WAVE_SYSTEM_PROMPT.md`: prompt substrate that makes agents carry the recursive loop and constitution
+
+### `seeds/` (self-seeding packets)
+
+- `seeds/templates/*.seed.json`: project, company, lab, governance, crypto/protocol, model-training, ecology, and commerce/trading seed templates
+- `nodes/schemas/seed.packet.schema.json`: machine-readable seed packet contract
+- `nodes/schemas/a2a.handoff.schema.json`: machine-readable A2A handoff contract
 
 ### `nodes/` (generative research lattice)
 
@@ -165,6 +184,7 @@ Naming note:
 - `scripts/validate_claim_packet.py`: CLI validator for claim promotion readiness
 - `agora/claim_promotion.py`: repo-wide promotion enforcement scanner for claim packets
 - `scripts/enforce_claim_promotions.py`: CI/release gate for requested-stage promotions
+- `scripts/check_carrier_wave.py`: verifies the recursive-civilization-engine carrier-wave invariants
 - `scripts/scaffold_claim_packet.py`: scaffold promotion-ready claim + witness/red-team files
 - `scripts/new_claim.py`: simplified claim creator (wrapper with optional prompts)
 

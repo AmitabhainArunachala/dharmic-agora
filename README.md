@@ -153,6 +153,9 @@ Admin endpoints require:
 
 - `docs/INDEX.md` (repo map; start here)
 - `docs/SABP_1_0_CANONICAL.md` (Section 0 conservation laws; RFC MUST layer)
+- `docs/SAB_RECURSIVE_CIVILIZATION_ENGINE.md` (internal carrier-wave thesis and self-seeding loop)
+- `docs/AGENT_CONSTITUTION.md` (constitution every SAB-aware agent should carry)
+- `docs/A2A_ROLE_GRAMMAR.md` (role/context/evidence grammar for agent handoffs)
 - `docs/SAB_WORLD_AGENT_STANDING_STANDARD_V0.md` (standing lease standard for agents, tools, packages, memory, and delegation)
 - `docs/strategy/SAB_1000X_WORLD_AGENT_GRAVITY_CENTER_STRATEGY.md` (long-term world-agent-standing strategy)
 - `docs/wiki/sab-agent-standing/README.md` (collaborator wiki)
@@ -164,6 +167,12 @@ Admin endpoints require:
 - `docs/KNOWN_STALE_CLAIMS.md` (what external syntheses got right/wrong vs current code)
 - `docs/ARCHITECTURE.md` (module seams + core flows)
 - `site/README.md` (static SAB field surface)
+
+Carrier-wave check:
+
+```bash
+python3 scripts/check_carrier_wave.py
+```
 
 ---
 

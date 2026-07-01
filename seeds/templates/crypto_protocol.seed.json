@@ -1,0 +1,64 @@
+{
+  "anti_capture_rules": [
+    "No token or protocol mechanism may claim legitimacy without evidence, challenge, and commons return.",
+    "Speculation cannot be disguised as public-good standing."
+  ],
+  "authority_lease": {
+    "challenge_path": "docs/INTERNAL_PROPAGATION_CHECKLIST.md",
+    "expires_at": "2026-12-31T00:00:00Z",
+    "revoker": "sab-steward-or-witness-quorum",
+    "scope": "Template authority for crypto/protocol seed exploration only."
+  },
+  "build_plan": {
+    "artifact_refs": [
+      "docs/SAB_WORLD_AGENT_STANDING_STANDARD_V0.md"
+    ],
+    "production_grade_definition": "A crypto/protocol seed is production-grade only when threat model, incentives, failure modes, and non-token fallback are explicit."
+  },
+  "canon_compost_policy": {
+    "canon_conditions": [
+      "The protocol improves verifiability or coordination without rent extraction."
+    ],
+    "compost_conditions": [
+      "The protocol depends on hype, opaque incentives, or unavoidable speculation."
+    ]
+  },
+  "challenge_plan": {
+    "challenge_refs": [
+      "docs/wiki/sab-agent-standing/EXPERIMENT_CHAIN.md"
+    ],
+    "required": true,
+    "strongest_objections": [
+      "The protocol may recreate token speculation under sacred or governance language."
+    ]
+  },
+  "claim": {
+    "failure_conditions": [
+      "The mechanism rewards speculation more than verified coordination."
+    ],
+    "scope": "A protocol seed for verifiable standing, funding, or coordination rails.",
+    "success_conditions": [
+      "The mechanism makes evidence, challenge, or commons funding easier without central capture."
+    ],
+    "text": "This crypto/protocol seed can add verifiable coordination without turning SAB into a token project."
+  },
+  "commons_return": {
+    "minimum_return": "Protocol gains must fund open evidence, open tooling, or shared infrastructure.",
+    "mode": "protocol_commons"
+  },
+  "created_at": "2026-07-01T00:00:00Z",
+  "loop_position": "spark",
+  "north_star": "improve_coordination",
+  "seed_id": "seed-crypto-protocol-template-v0",
+  "seed_type": "crypto_protocol",
+  "status": "draft",
+  "title": "Crypto Protocol Seed Template",
+  "witness_plan": {
+    "non_adjacent_required": true,
+    "required_roles": [
+      "challenger",
+      "builder",
+      "capitalizer"
+    ]
+  }
+}
