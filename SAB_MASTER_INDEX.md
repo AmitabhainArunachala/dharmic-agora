@@ -19,11 +19,13 @@ The artifacts preserve git status/diff manifests, untracked file archives, a liv
 
 Canonical working repo for this audit:
 - Path: `/Users/dhyana/dharmic-agora`
-- Working branch: `codex/sab-foundation-hardening-20260702`
+- Foundation branch: `codex/sab-foundation-hardening-20260702`
 - Base branch: `origin/main`
 - Base SHA: `1c71b93a834a7e3e50e246012df61cc9fc40ba0a`
+- Foundation PR: `#2`
+- Foundation merge SHA: `06b357f5017ebb108ec51daa11278f2c3d367a80`
 - Primary remote: `origin https://github.com/AmitabhainArunachala/dharmic-agora.git`
-- Secondary remote to retire: `shakti-saraswati https://github.com/shakti-saraswati/dharmic-agora.git`
+- Local secondary remote retired: `shakti-saraswati https://github.com/shakti-saraswati/dharmic-agora.git`
 
 Branch policy:
 - `main` is the merge target.
@@ -52,7 +54,7 @@ Convergence seam:
 
 ## Where Production Runs
 
-Observed from Phase 0 forensics:
+Observed from Phase 0 forensics before cutover:
 - Host label: `agni-openclaw`
 - Service: `sab-agora.service`
 - Live service file: `/etc/systemd/system/sab-agora.service`
@@ -67,6 +69,18 @@ Important drift:
 - Live production runs `agora.api_server:app` from a dirty checkout.
 - Checked-in Docker deployment currently runs `agora.app:app`.
 - Deployment work must state which surface is being cut over before restart.
+
+Post-cutover state, 2026-07-02:
+- Release path: `/home/openclaw/dharmic-agora-release`
+- Release SHA: `06b357f5017ebb108ec51daa11278f2c3d367a80`
+- Live service file: `/etc/systemd/system/sab-agora.service`
+- Service backup before edit: `/root/sab-agora.service.pre-06b357f-20260702T031334Z`
+- Active app target: `agora.api_server:app`
+- Active command: `/home/openclaw/dharmic-agora-release/.venv/bin/python -m uvicorn agora.api_server:app --host 127.0.0.1 --port 8000 --workers 1`
+- Live data link: `/home/openclaw/dharmic-agora-release/data -> /home/openclaw/saraswati-dharmic-agora/data`
+- Health result: `http://127.0.0.1:8000/health` returns `healthy` with `gates: 12`; `https://157.245.193.15/health` returns HTTP 200.
+- DNS gap: `agora.dharmic.ai` still has no A/AAAA answer as of this audit.
+- Rollback path: restore `/etc/systemd/system/sab-agora.service` from `/root/sab-agora.service.pre-06b357f-20260702T031334Z`, then `systemctl daemon-reload && systemctl restart sab-agora`.
 
 ## Deployment Checkouts
 
@@ -93,8 +107,8 @@ Observed Agni repo copies:
   - ahead 1 with modified deploy/API/auth files
 
 Recommended canonical deployment path after cleanup:
-- Use one non-root deploy checkout only.
-- Prefer `/home/openclaw/repos/saraswati-dharmic-agora` or a freshly named release path.
+- Use one deploy checkout only.
+- Current release path is `/home/openclaw/dharmic-agora-release`.
 - Retire dirty live checkouts only after diff preservation, merge decision, and at least one successful bake period.
 
 ## Retired / Do Not Use As Source Of Truth
@@ -143,6 +157,20 @@ Forensic `sabp.db` row counts:
 6. Redeploy from clean `main`, not from a dirty live tree.
 7. Before the first redeploy after this audit, preserve Phase 0 dirty live diffs and decide what to merge, archive, or discard.
 8. After deploy, record deployed commit SHA, service unit, app target, DB path/env, health result, and rollback SHA.
+
+## Backups
+
+Authority DB backup script:
+- Source: `scripts/backup_sabp_db.sh`
+- Agni cron target: `/home/openclaw/dharmic-agora-release/scripts/backup_sabp_db.sh`
+- Default DB path: `/home/openclaw/saraswati-dharmic-agora/data/sabp.db`
+- Default backup root: `/root/sab-db-backups`
+- Default retention: 14 days
+- Method: Python `sqlite3.Connection.backup` against a read-only source connection, followed by a SHA256 sidecar file.
+
+Off-box backup status:
+- Phase 0 forensics were copied off Agni to `/Users/dhyana/sab-forensics/`.
+- Recurring off-box sync is not configured yet; add only after choosing a destination and credential boundary.
 
 ## Deferred Foundation Follow-Ups
 
