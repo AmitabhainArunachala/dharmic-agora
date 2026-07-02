@@ -28,10 +28,11 @@ python3 -m compileall -q agora || {
 
 # Optional backup: sqlite file if present
 TS="$(date -u +%Y%m%d_%H%M%SZ)"
-if [[ -f agora.db ]]; then
+DB_PATH="${SAB_AUTHORITY_DB_PATH:-${SAB_DB_PATH:-data/sabp.db}}"
+if [[ -f "${DB_PATH}" ]]; then
   mkdir -p backups
-  cp -a agora.db "backups/agora_${TS}.db"
-  echo "Backup: backups/agora_${TS}.db"
+  cp -a "${DB_PATH}" "backups/sabp_${TS}.db"
+  echo "Backup: backups/sabp_${TS}.db"
 fi
 
 PORT="${PORT:-8000}"

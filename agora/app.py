@@ -26,6 +26,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel, Field, field_validator
 
+from .admission_policy import FAST_LANE_AUTO
 from .config import SAB_VERSION, get_db_path
 from .gates import ALL_GATES, evaluate_submission_gates
 from .rv_signal import measure_rv_signal
@@ -683,7 +684,7 @@ def _message_for_witness(spark_id: int, witness_id: str, action: str, payload_sh
 
 
 def _verify_agent_signature(conn: sqlite3.Connection, agent_id: str, message: bytes, signature_hex: str) -> None:
-    row = conn.execute(f"SELECT public_key FROM {WEB_AGENT_TABLE} WHERE id = ?", (agent_id,)).fetchone()  # nosec B608 - WEB_AGENT_TABLE is a fixed module constant, value is parameterized
+    row = conn.execute("SELECT public_key FROM web_agents WHERE id = ?", (agent_id,)).fetchone()
     if row is None:
         raise HTTPException(status_code=404, detail=f"Unknown agent: {agent_id}")
 
@@ -722,7 +723,7 @@ def _append_witness(
     related_link_ids_json = encode_related_link_ids(normalized_related)
 
     prev_row = conn.execute(
-        f"SELECT hash FROM {SPARK_WITNESS_TABLE} WHERE spark_id IS ? ORDER BY id DESC LIMIT 1",  # nosec B608 - SPARK_WITNESS_TABLE is a fixed module constant, value is parameterized
+        "SELECT hash FROM spark_witness_chain WHERE spark_id IS ? ORDER BY id DESC LIMIT 1",
         (spark_id,),
     ).fetchone()
     prev_hash = str(prev_row["hash"]) if prev_row else "genesis"
@@ -985,15 +986,16 @@ def _spark_chain_payload(conn: sqlite3.Connection, spark_id: int) -> Dict[str, A
         """,
         (spark_id,),
     ).fetchall()
-    challenge_rows = conn.execute(
-        f"""
+    challenge_sql = """
         SELECT id, spark_id, challenger_id, content, created_at, resolution,
                resolved_at, successor_spark_id, correction_artifact,
                correction_content_sha256, sublation_witness_hash
         FROM spark_challenges
         WHERE spark_id IN ({placeholders})
         ORDER BY spark_id ASC, id ASC
-        """,  # nosec B608 - placeholders is a "?"-only string sized to a list length, all values parameterized
+        """.format(placeholders=placeholders)  # nosec B608
+    challenge_rows = conn.execute(
+        challenge_sql,
         tuple(challenge_spark_ids),
     ).fetchall()
     entries = [_serialize_public_witness_row(row) for row in rows]
@@ -1209,7 +1211,7 @@ async def register_agent(req: AgentRegisterRequest) -> Dict[str, Any]:
             """,
             (agent_id, req.name, req.public_key, created_at),
         )
-        row = conn.execute(f"SELECT * FROM {WEB_AGENT_TABLE} WHERE id = ?", (agent_id,)).fetchone()  # nosec B608 - WEB_AGENT_TABLE is a fixed module constant, value is parameterized
+        row = conn.execute("SELECT * FROM web_agents WHERE id = ?", (agent_id,)).fetchone()
     if row is None:
         raise HTTPException(status_code=500, detail="failed to register agent")
     return {
@@ -1230,7 +1232,7 @@ async def submit_spark(req: SparkSubmitRequest) -> Dict[str, Any]:
         _verify_agent_signature(conn, req.author_id, submit_message, req.signature)
 
         agent_row = conn.execute(
-            f"SELECT id, name, created_at FROM {WEB_AGENT_TABLE} WHERE id = ?",  # nosec B608 - WEB_AGENT_TABLE is a fixed module constant, value is parameterized
+            "SELECT id, name, created_at FROM web_agents WHERE id = ?",
             (req.author_id,),
         ).fetchone()
         if agent_row is None:
@@ -1261,9 +1263,8 @@ async def submit_spark(req: SparkSubmitRequest) -> Dict[str, Any]:
         gate_scores, _, _, _ = evaluate_submission_gates(req.content, req.author_id, gate_context)
         rv_signal = measure_rv_signal(req.content)
         gate_scores = _with_rv_signal(gate_scores, rv_signal)
-        status_value = "spark"
-        if not gate_scores.get("ahimsa_passed", True):
-            status_value = "compost"
+        admission = FAST_LANE_AUTO.decide(gate_scores)
+        status_value = admission.status
 
         cursor = conn.cursor()
         cursor.execute(
@@ -1320,7 +1321,7 @@ async def submit_spark(req: SparkSubmitRequest) -> Dict[str, Any]:
                     "kind": "system_witness",
                     "spark_id": spark_id,
                     "action": "compost",
-                    "payload": {"reason": "ahimsa_gate_failed"},
+                    "payload": {"reason": admission.reason},
                 }
             )
             _append_witness(
@@ -1328,7 +1329,7 @@ async def submit_spark(req: SparkSubmitRequest) -> Dict[str, Any]:
                 spark_id=spark_id,
                 witness_id="system",
                 action="compost",
-                payload={"reason": "ahimsa_gate_failed"},
+                payload={"reason": admission.reason},
                 signature_hex=compost_signature,
             )
 
@@ -1354,7 +1355,7 @@ async def get_spark(spark_id: int) -> Dict[str, Any]:
         )
         witness_count = int(
             conn.execute(
-                f"SELECT COUNT(*) AS c FROM {SPARK_WITNESS_TABLE} WHERE spark_id = ?",  # nosec B608 - SPARK_WITNESS_TABLE is a fixed module constant, value is parameterized
+                "SELECT COUNT(*) AS c FROM spark_witness_chain WHERE spark_id = ?",
                 (spark_id,),
             ).fetchone()["c"]
         )
@@ -1489,7 +1490,7 @@ async def sublate_challenge(
         _verify_agent_signature(conn, req.corrector_id, sublation_message, req.signature)
 
         corrector_row = conn.execute(
-            f"SELECT id, name, created_at FROM {WEB_AGENT_TABLE} WHERE id = ?",  # nosec B608 - WEB_AGENT_TABLE is a fixed module constant, value is parameterized
+            "SELECT id, name, created_at FROM web_agents WHERE id = ?",
             (req.corrector_id,),
         ).fetchone()
         if corrector_row is None:
@@ -1522,9 +1523,8 @@ async def sublate_challenge(
         gate_scores, _, _, _ = evaluate_submission_gates(corrected_content, req.corrector_id, gate_context)
         rv_signal = measure_rv_signal(corrected_content)
         gate_scores = _with_rv_signal(gate_scores, rv_signal)
-        status_value = "spark"
-        if not gate_scores.get("ahimsa_passed", True):
-            status_value = "compost"
+        admission = FAST_LANE_AUTO.decide(gate_scores)
+        status_value = admission.status
 
         cursor = conn.cursor()
         cursor.execute(
@@ -1922,6 +1922,37 @@ async def node_status() -> Dict[str, Any]:
     }
 
 
+@app.get("/health")
+async def health() -> Dict[str, Any]:
+    """Conventional public-app health probe."""
+    status_payload = await node_status()
+    return {
+        "status": status_payload["status"],
+        "version": status_payload["version"],
+        "surface": "agora.app",
+        "db_path": status_payload["db_path"],
+        "timestamp": status_payload["timestamp"],
+    }
+
+
+@app.get("/healthz")
+async def healthz() -> Dict[str, Any]:
+    return await health()
+
+
+@app.get("/readyz")
+async def readyz() -> Dict[str, Any]:
+    init_db()
+    with _db() as conn:
+        conn.execute("SELECT 1").fetchone()
+    return {
+        "status": "ready",
+        "surface": "agora.app",
+        "db_path": str(SPARK_DB),
+        "timestamp": _utc_now(),
+    }
+
+
 @app.get("/api/cache/stats")
 async def cache_stats() -> Dict[str, Any]:
     """Lightweight cache instrumentation endpoint."""
@@ -2039,15 +2070,16 @@ async def web_seed(request: Request) -> HTMLResponse:
                 if spark and spark.get("parent_spark_id"):
                     challenge_spark_ids.append(int(spark["parent_spark_id"]))
                 placeholders = ",".join("?" for _ in challenge_spark_ids)
-                challenge_rows = conn.execute(
-                    f"""
+                challenge_sql = """
                     SELECT id, spark_id, challenger_id, content, created_at, resolution,
                            resolved_at, successor_spark_id, correction_artifact,
                            correction_content_sha256, sublation_witness_hash
                     FROM spark_challenges
                     WHERE spark_id IN ({placeholders})
                     ORDER BY spark_id ASC, id ASC
-                    """,  # nosec B608 - placeholders is a "?"-only string sized to a list length, all values parameterized
+                    """.format(placeholders=placeholders)  # nosec B608
+                challenge_rows = conn.execute(
+                    challenge_sql,
                     tuple(challenge_spark_ids),
                 ).fetchall()
                 challenges = [_serialize_challenge_row(row) for row in challenge_rows]
@@ -2331,7 +2363,7 @@ async def web_agent_profile(request: Request, agent_id: str) -> HTMLResponse:
     init_db()
     with _db() as conn:
         agent = conn.execute(
-            f"SELECT id, name, public_key, created_at, witness_count, witness_accuracy FROM {WEB_AGENT_TABLE} WHERE id = ?",  # nosec B608 - WEB_AGENT_TABLE is a fixed module constant, value is parameterized
+            "SELECT id, name, public_key, created_at, witness_count, witness_accuracy FROM web_agents WHERE id = ?",
             (agent_id,),
         ).fetchone()
         if agent is None:

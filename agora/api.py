@@ -19,7 +19,7 @@ from pydantic import BaseModel, Field
 
 # Import agora modules
 from .auth import AgentAuth
-from .gates import GateProtocol, GateResult, ALL_GATES
+from .gates import ALL_GATES, evaluate_submission_gates
 from .models import (
     generate_content_id
 )
@@ -398,43 +398,48 @@ async def create_post(
 ):
     """Create a new post (runs gate verification)."""
     
-    # Run gate protocol
-    gate_protocol = GateProtocol()
     context = {
         "author_address": agent["sub"],
         "author_name": agent["name"],
     }
-    
-    passed, evidence, evidence_hash = gate_protocol.verify(
+
+    gate_result, _, _, evidence_hash = evaluate_submission_gates(
         request.content,
         agent["sub"],
         context
     )
-    
+    dimensions = gate_result["dimensions"]
     gate_results = [
         {
-            "gate": e.gate_name,
-            "result": e.result.value,
-            "confidence": e.confidence,
-            "reason": e.reason
+            "gate": gate_name,
+            "result": result["result"],
+            "confidence": result["confidence"],
+            "reason": result["reason"],
         }
-        for e in evidence
+        for gate_name, result in dimensions.items()
     ]
-    
-    gate_failures = [e.gate_name for e in evidence if e.result == GateResult.FAILED and e.gate_name in [g.name for g in gate_protocol.required_gates]]
-    
+    quality_score = float(gate_result["composite"])
+    required_gates = set(gate_result["required_gates"])
+    gate_failures = [
+        gate_name
+        for gate_name, result in dimensions.items()
+        if result["result"] == "failed" and gate_name in required_gates
+    ]
+    passed = bool(gate_result["required_passed"])
+
     if not passed:
         return CreatePostResponse(
             accepted=False,
             gate_results=gate_results,
-            quality_score=gate_protocol.calculate_quality_score(evidence),
+            quality_score=quality_score,
             gate_failures=gate_failures
         )
     
     # Create post
     post_id = generate_content_id(agent["sub"], request.content, datetime.now(timezone.utc).isoformat())
-    gates_passed = [e.gate_name for e in evidence if e.result == GateResult.PASSED]
-    quality_score = gate_protocol.calculate_quality_score(evidence)
+    gates_passed = [
+        gate_name for gate_name, result in dimensions.items() if result["result"] == "passed"
+    ]
     
     conn = db.get_connection()
     cursor = conn.cursor()

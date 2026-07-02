@@ -56,7 +56,7 @@ cd /home/openclaw/.openclaw/workspace/dharmic-agora
 cat > .env << 'EOF'
 SAB_ADMIN_ALLOWLIST=<AGENT_ADDRESS_HERE>
 SAB_JWT_SECRET=/app/data/.jwt_secret
-SAB_DB_PATH=/app/data/agora.db
+SAB_AUTHORITY_DB_PATH=/app/data/sabp.db
 SAB_SIGNATURE_MAX_AGE_SECONDS=900
 SAB_VERSION=0.3.1
 EOF

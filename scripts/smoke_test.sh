@@ -75,8 +75,10 @@ import subprocess
 import sys
 
 import httpx
+from nacl.encoding import HexEncoder
 from nacl.signing import SigningKey
 
+from agora.auth import build_contribution_message
 from connectors.sabp_client import SabpClient
 
 base_url = os.environ["BASE_URL"]
@@ -161,7 +163,43 @@ try:
     bootstrap_signal = json.loads(signal_cli.stdout.strip())
     assert bootstrap_signal["event_id"] == "smoke-bootstrap-identity"
 
-    queued = c.submit_post("## Smoke Test\n\nSABP smoke post.")
+    contributor_sk = SigningKey.generate()
+    contributor_pub = contributor_sk.verify_key.encode(encoder=HexEncoder).decode()
+    with httpx.Client(base_url=base_url, timeout=30.0) as raw:
+        r = raw.post(
+            "/auth/register",
+            json={"name": "smoke-contributor", "pubkey": contributor_pub, "telos": "smoke"},
+        )
+        r.raise_for_status()
+        contributor_address = r.json()["address"]
+
+        r = raw.get("/auth/challenge", params={"address": contributor_address})
+        r.raise_for_status()
+        contributor_challenge = r.json()["challenge"]
+
+        contributor_sig = contributor_sk.sign(bytes.fromhex(contributor_challenge)).signature.hex()
+        r = raw.post(
+            "/auth/verify",
+            json={"address": contributor_address, "signature": contributor_sig},
+        )
+        r.raise_for_status()
+        contributor_jwt = r.json()["token"]
+
+    post_content = "## Smoke Test\n\nSABP smoke post."
+    signed_at = datetime.now(timezone.utc).isoformat()
+    contribution_message = build_contribution_message(
+        agent_address=contributor_address,
+        content=post_content,
+        signed_at=signed_at,
+        content_type="post",
+    )
+    contribution_signature = contributor_sk.sign(contribution_message).signature.hex()
+    c.auth.bearer_token = contributor_jwt
+    queued = c.submit_post(
+        post_content,
+        signature=contribution_signature,
+        signed_at=signed_at,
+    )
     queue_id = queued["queue_id"]
 
     signal_payload = {

@@ -14,6 +14,34 @@ from datetime import datetime, timezone
 from typing import List, Dict, Tuple, Any
 from enum import Enum
 
+GATE_EVALUATOR_VERSION = "sabp-gate-protocol/1.0.0"
+GATE_POLICY_PROFILE = "SABP/1.0-PILOT"
+GATE_POLICY_HASH_ALGORITHM = "sha256"
+
+WITNESS_ADDRESS_PATTERNS = (
+    r"^[a-f0-9]{16}$",
+    r"^t_[a-f0-9]{14}$",
+    r"^k_[a-f0-9]{14}$",
+)
+
+RELEVANCE_STOPWORDS = frozenset(
+    {
+        "the", "a", "an", "is", "are", "was", "were", "be", "been", "being",
+        "have", "has", "had", "do", "does", "did", "will", "would", "could",
+        "should", "may", "might", "must", "shall", "can", "need", "to", "of",
+        "in", "for", "on", "with", "at", "by", "from", "as", "into", "through",
+    }
+)
+
+RATE_LIMIT_MAX_POSTS_PER_HOUR = 10
+RATE_LIMIT_MAX_POSTS_PER_DAY = 50
+
+ISVARA_PURPOSE_PATTERNS = [
+    r"(?i)\b(purpose|meaning|service|contribution)\b",
+    r"(?i)\b(helping|supporting|sharing|teaching)\b",
+    r"(?i)\b(truth|wisdom|knowledge|understanding)\b",
+]
+
 
 class GateResult(str, Enum):
     PASSED = "passed"
@@ -160,12 +188,7 @@ class WitnessGate(Gate):
         if not author_address:
             return self._evidence(GateResult.FAILED, 0.95, "No author address provided")
 
-        valid_address_patterns = (
-            r"^[a-f0-9]{16}$",
-            r"^t_[a-f0-9]{14}$",
-            r"^k_[a-f0-9]{14}$",
-        )
-        if not any(re.match(pattern, author_address) for pattern in valid_address_patterns):
+        if not any(re.match(pattern, author_address) for pattern in WITNESS_ADDRESS_PATTERNS):
             return self._evidence(GateResult.FAILED, 0.9, "Invalid author address format")
 
         # Check content is hashable
@@ -282,13 +305,8 @@ class RelevanceGate(Gate):
         parent_words = set(parent_content.lower().split())
 
         # Remove common words
-        stopwords = {"the", "a", "an", "is", "are", "was", "were", "be", "been", "being",
-                     "have", "has", "had", "do", "does", "did", "will", "would", "could",
-                     "should", "may", "might", "must", "shall", "can", "need", "to", "of",
-                     "in", "for", "on", "with", "at", "by", "from", "as", "into", "through"}
-
-        content_words -= stopwords
-        parent_words -= stopwords
+        content_words -= RELEVANCE_STOPWORDS
+        parent_words -= RELEVANCE_STOPWORDS
 
         if not content_words or not parent_words:
             return self._evidence(GateResult.WARNING, 0.5, "Unable to assess relevance")
@@ -381,14 +399,14 @@ class RateLimitGate(Gate):
         posts_last_hour = context.get("author_posts_last_hour", 0)
         posts_last_day = context.get("author_posts_last_day", 0)
 
-        if posts_last_hour > 10:
+        if posts_last_hour > RATE_LIMIT_MAX_POSTS_PER_HOUR:
             return self._evidence(
                 GateResult.FAILED,
                 0.95,
                 f"Rate limit exceeded: {posts_last_hour} posts in last hour"
             )
 
-        if posts_last_day > 50:
+        if posts_last_day > RATE_LIMIT_MAX_POSTS_PER_DAY:
             return self._evidence(
                 GateResult.FAILED,
                 0.95,
@@ -469,14 +487,7 @@ class IsvaraGate(Gate):
     weight = 0.4
 
     def check(self, content: str, author_address: str, context: Dict[str, Any]) -> GateEvidence:
-        # Checks for mention of purpose, service, contribution
-        PURPOSE_PATTERNS = [
-            r"(?i)\b(purpose|meaning|service|contribution)\b",
-            r"(?i)\b(helping|supporting|sharing|teaching)\b",
-            r"(?i)\b(truth|wisdom|knowledge|understanding)\b",
-        ]
-
-        for pattern in PURPOSE_PATTERNS:
+        for pattern in ISVARA_PURPOSE_PATTERNS:
             if re.search(pattern, content):
                 return self._evidence(
                     GateResult.PASSED,
@@ -514,6 +525,70 @@ ALL_GATES: List[Gate] = [
 ]
 
 REQUIRED_GATES = [g for g in ALL_GATES if g.required]
+
+
+def _format_policy_weight(value: float) -> str:
+    return f"{float(value):.6f}"
+
+
+def _static_policy_for_gate(gate: Gate) -> Dict[str, Any]:
+    if gate.name == "satya":
+        return {"manipulation_patterns": list(SatyaGate.MANIPULATION_PATTERNS)}
+    if gate.name == "ahimsa":
+        return {"harm_patterns": list(AhimsaGate.HARM_PATTERNS)}
+    if gate.name == "witness":
+        return {"address_patterns": list(WITNESS_ADDRESS_PATTERNS)}
+    if gate.name == "originality":
+        return {"spam_hashes": sorted(OriginalityGate.SPAM_HASHES)}
+    if gate.name == "relevance":
+        return {"stopwords": sorted(RELEVANCE_STOPWORDS)}
+    if gate.name == "rate_limit":
+        return {
+            "max_posts_per_hour": RATE_LIMIT_MAX_POSTS_PER_HOUR,
+            "max_posts_per_day": RATE_LIMIT_MAX_POSTS_PER_DAY,
+        }
+    if gate.name == "svadhyaya":
+        return {"self_reflection_patterns": list(SvadhyayaGate.SELF_REFLECTION_PATTERNS)}
+    if gate.name == "isvara":
+        return {"purpose_patterns": list(ISVARA_PURPOSE_PATTERNS)}
+    return {}
+
+
+GATE_WEIGHT_SET = {gate.name: _format_policy_weight(gate.weight) for gate in ALL_GATES}
+
+
+def build_gate_policy_snapshot() -> Dict[str, Any]:
+    return {
+        "schema": "sabp.gate_policy_snapshot.v1",
+        "profile": GATE_POLICY_PROFILE,
+        "evaluator_version": GATE_EVALUATOR_VERSION,
+        "gate_order": [gate.name for gate in ALL_GATES],
+        "required_gates": [gate.name for gate in REQUIRED_GATES],
+        "weight_set": GATE_WEIGHT_SET,
+        "gates": [
+            {
+                "name": gate.name,
+                "class": gate.__class__.__name__,
+                "required": bool(gate.required),
+                "weight": _format_policy_weight(gate.weight),
+                "policy": _static_policy_for_gate(gate),
+            }
+            for gate in ALL_GATES
+        ],
+    }
+
+
+def _stable_policy_hash(snapshot: Dict[str, Any]) -> str:
+    payload = json.dumps(
+        snapshot,
+        sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=True,
+    ).encode("utf-8")
+    return hashlib.sha256(payload).hexdigest()
+
+
+GATE_POLICY_HASH = _stable_policy_hash(build_gate_policy_snapshot())
 
 
 class GateProtocol:
@@ -613,6 +688,13 @@ def build_gate_result(evidence: List[GateEvidence], evidence_hash: str, admitted
         "dimensions": dimensions,
         "composite": round(float(calculate_quality(evidence)), 6),
         "evidence_hash": evidence_hash,
+        "evaluation_metadata": {
+            "evaluator_version": GATE_EVALUATOR_VERSION,
+            "policy_hash": GATE_POLICY_HASH,
+            "policy_hash_algorithm": GATE_POLICY_HASH_ALGORITHM,
+            "policy_profile": GATE_POLICY_PROFILE,
+            "weight_set": GATE_WEIGHT_SET,
+        },
         "admitted": bool(admitted),
         "required_passed": bool(admitted),
         "passed_count": passed_count,

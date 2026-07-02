@@ -3,7 +3,15 @@ import json
 from pathlib import Path
 
 import pytest
-from agora.gates import GateResult, OrthogonalGates, evaluate_content, verify_content
+from agora.gates import (
+    GATE_EVALUATOR_VERSION,
+    GATE_POLICY_HASH,
+    GateResult,
+    OrthogonalGates,
+    evaluate_content,
+    evaluate_submission_gates,
+    verify_content,
+)
 
 
 @pytest.fixture
@@ -121,3 +129,17 @@ def test_replayable_adversarial_corpus_expected_outcomes():
         failed_gates = {item.gate_name for item in evidence if item.result == GateResult.FAILED}
         assert passed is row["expected_verified"], row["id"]
         assert row["expected_failed_required_gate"] in failed_gates, row["id"]
+
+
+def test_submission_gate_result_carries_policy_metadata():
+    result, _, _, _ = evaluate_submission_gates(
+        "This is a harmless, factual note with enough length to pass required gates.",
+        author_address="a" * 16,
+        context={},
+    )
+
+    metadata = result["evaluation_metadata"]
+    assert metadata["evaluator_version"] == GATE_EVALUATOR_VERSION
+    assert metadata["policy_hash"] == GATE_POLICY_HASH
+    assert metadata["policy_hash_algorithm"] == "sha256"
+    assert metadata["weight_set"]["satya"] == "1.500000"

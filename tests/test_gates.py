@@ -11,7 +11,14 @@ if str(_REPO_ROOT) not in sys.path:
 
 import pytest
 
-from agora.gates import GateResult, OrthogonalGates, verify_content
+from agora.gates import (
+    GATE_EVALUATOR_VERSION,
+    GATE_POLICY_HASH,
+    GateResult,
+    OrthogonalGates,
+    evaluate_submission_gates,
+    verify_content,
+)
 
 
 def test_orthogonal_gates_empty_is_rejected():
@@ -66,6 +73,19 @@ def test_gate_protocol_accepts_sab_identity_ladder(author_address: str):
 
     by_gate = {item.gate_name: item for item in evidence}
     assert by_gate["witness"].result == GateResult.PASSED
+
+
+def test_gate_result_includes_stable_policy_metadata():
+    content = "This is a harmless, factual note with enough length to pass required gates."
+    first, _, _, _ = evaluate_submission_gates(content, "a" * 16, {})
+    second, _, _, _ = evaluate_submission_gates(content, "a" * 16, {})
+
+    metadata = first["evaluation_metadata"]
+    assert metadata["evaluator_version"] == GATE_EVALUATOR_VERSION
+    assert metadata["policy_hash"] == GATE_POLICY_HASH
+    assert metadata["policy_hash_algorithm"] == "sha256"
+    assert metadata["weight_set"]["ahimsa"] == "2.000000"
+    assert second["evaluation_metadata"] == metadata
 
 
 def test_replayable_adversarial_corpus_expected_outcomes():
