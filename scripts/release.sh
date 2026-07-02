@@ -34,6 +34,11 @@ echo ""
 echo "Enforcing claim promotion thresholds..."
 python3 scripts/enforce_claim_promotions.py --require-stage --fail-on-no-claims
 
+# Enforce gate evaluator singularity
+echo ""
+echo "Enforcing gate singularity..."
+python3 scripts/check_gate_singularity.py
+
 # Run integration test
 echo ""
 echo "Running integration test..."

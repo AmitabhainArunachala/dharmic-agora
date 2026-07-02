@@ -43,7 +43,7 @@ Create `.env` file:
 OPENAI_API_KEY=your_key_here
 
 # Optional (with defaults)
-DATABASE_URL=sqlite:///data/agora.db
+SAB_AUTHORITY_DB_PATH=/app/data/sabp.db
 REDIS_URL=redis://redis:6379/0
 USE_MILVUS=false
 MILVUS_HOST=localhost

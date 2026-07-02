@@ -33,7 +33,7 @@ try:
     from agora.auth import AgentAuth, build_contribution_message
     from agora.config import SAB_VERSION, get_db_path
     from agora.depth import calculate_depth_score
-    from agora.gates import ALL_GATES, OrthogonalGates, evaluate_submission_gates
+    from agora.gates import ALL_GATES, evaluate_submission_gates
     from agora.moderation import ModerationStore
     from agora.pilot import PilotManager
     from agora.convergence import ConvergenceStore
@@ -53,7 +53,7 @@ except ImportError:
     from agora.auth import AgentAuth, build_contribution_message
     from agora.config import SAB_VERSION, get_db_path
     from agora.depth import calculate_depth_score
-    from agora.gates import ALL_GATES, OrthogonalGates, evaluate_submission_gates
+    from agora.gates import ALL_GATES, evaluate_submission_gates
     from agora.moderation import ModerationStore
     from agora.pilot import PilotManager
     from agora.convergence import ConvergenceStore
@@ -373,126 +373,6 @@ def record_audit(
 
 # Initialize database on module load
 init_database()
-
-# =============================================================================
-# GATE SYSTEM (17-GATE PROTOCOL)
-# =============================================================================
-
-class GateResult(BaseModel):
-    """Result of a single gate check."""
-    name: str
-    passed: bool
-    score: float = Field(ge=0.0, le=1.0)
-    evidence: dict
-
-
-class GateKeeper:
-    """
-    17-Gate Content Verification System.
-    
-    Each piece of content must pass a configurable set of gates
-    before being published to the agora.
-    """
-    
-    ALL_GATES = [
-        "SATYA",      # Truth - no misinformation
-        "AHIMSA",     # Non-harm - no manipulation
-        "ASTEYA",     # Non-stealing - original content
-        "BRAHMACHARYA", # Focus - on-topic
-        "APARIGRAHA", # Non-attachment - not clinging to engagement
-        "SHAUCHA",    # Purity - no toxicity
-        "SANTOSHA",   # Contentment - not outrage farming
-        "TAPAS",      # Discipline - quality over quantity
-        "SVADHYAYA",  # Self-study - appropriate self-disclosure
-        "ISHVARA",    # Higher purpose - serves collective
-        "WITNESS",    # Audit trail - signed evidence
-        "CONSENT",    # Respect boundaries
-        "NONVIOLENCE", # No harassment
-        "TRANSPARENCY", # Clear intent
-        "RECIPROCITY", # Mutual benefit
-        "HUMILITY",   # Not claiming unearned authority
-        "INTEGRITY",  # Alignment with declared telos
-    ]
-    
-    # Required gates for all posts
-    REQUIRED_GATES = ["SATYA", "AHIMSA", "WITNESS"]
-    
-    @staticmethod
-    async def run_gate(gate_name: str, content: str, author_address: str) -> GateResult:
-        """
-        Run a single gate check on content.
-        
-        PLACEHOLDER: This is where AI/ML content verification would run.
-        For now, basic heuristics are used.
-        """
-        evidence = {"gate": gate_name, "content_length": len(content)}
-        
-        # SATYA - Basic truth checks (placeholder)
-        if gate_name == "SATYA":
-            # Check for obvious misinformation patterns
-            # PLACEHOLDER: In production, use fact-checking API or LLM
-            score = 0.9 if len(content) > 10 else 0.5
-            passed = score >= 0.7
-            evidence["checks"] = ["length_sufficient"]
-        
-        # AHIMSA - Non-harm check (placeholder)
-        elif gate_name == "AHIMSA":
-            # Check for toxic language patterns
-            # PLACEHOLDER: In production, use toxicity classifier
-            toxic_keywords = ["hate", "kill", "destroy", "attack"]
-            has_toxic = any(kw in content.lower() for kw in toxic_keywords)
-            score = 0.0 if has_toxic else 0.95
-            passed = not has_toxic
-            evidence["toxic_check"] = "passed" if not has_toxic else "failed"
-        
-        # WITNESS - Audit trail (placeholder)
-        elif gate_name == "WITNESS":
-            # Always passes - this creates the evidence trail
-            score = 1.0
-            passed = True
-            evidence["witness_hash"] = hashlib.sha256(content.encode()).hexdigest()[:16]
-        
-        # Default for unimplemented gates
-        else:
-            score = 0.8  # Default permissive
-            passed = True
-            evidence["status"] = "placeholder"
-        
-        return GateResult(
-            name=gate_name,
-            passed=passed,
-            score=score,
-            evidence=evidence
-        )
-    
-    @classmethod
-    async def verify_content(cls, content: str, author_address: str, 
-                            gates: Optional[List[str]] = None) -> tuple[bool, List[GateResult]]:
-        """
-        Run content through all required gates.
-        
-        Returns:
-            (all_passed, list_of_results)
-        """
-        gates_to_run = gates or cls.REQUIRED_GATES
-        results = []
-        
-        for gate_name in gates_to_run:
-            result = await cls.run_gate(gate_name, content, author_address)
-            results.append(result)
-        
-        all_passed = all(r.passed for r in results)
-        return all_passed, results
-    
-    @staticmethod
-    def hash_gate_results(results: List[GateResult]) -> str:
-        """Create hash of gate verification evidence."""
-        data = [
-            {"gate": r.name, "passed": r.passed, "score": r.score}
-            for r in results
-        ]
-        return hashlib.sha256(json.dumps(data, sort_keys=True).encode()).hexdigest()
-
 
 # =============================================================================
 # PYDANTIC MODELS
@@ -1609,6 +1489,7 @@ async def create_post(
         gate_results=gate_results,
         signature=request.signature,
         signed_at=request.signed_at,
+        depth_score=depth_score,
         submission_kind=request.submission_kind,
         node_coordinate=node_coordinate,
     )
@@ -1926,6 +1807,23 @@ async def ingest_dgc_signal(
         },
     )
     _convergence.attach_audit_hash(req.event_id, audit["data_hash"])
+    _moderation.witness.record(
+        "dgc_signal_replayed" if was_replay else "dgc_signal_ingested",
+        agent["address"],
+        {
+            "event_id": req.event_id,
+            "task_id": req.task_id,
+            "artifact_id": req.artifact_id,
+            "payload_hash": payload_hash,
+            "audit_hash": audit["data_hash"],
+            "observe_only": True,
+        },
+        content_id=req.event_id,
+        witness_domain=GOVERNANCE_WITNESS_DOMAIN,
+        subject_type="dgc_signal",
+        subject_id=req.event_id,
+        origin="agora.api_server.ingest_dgc_signal",
+    )
 
     gradient = outcome["gradient"] or {}
     return DGCSignalResponse(
@@ -2382,6 +2280,7 @@ async def create_comment(
         parent_id=request.parent_id,
         signature=request.signature,
         signed_at=request.signed_at,
+        depth_score=depth_score,
         submission_kind=request.submission_kind,
         node_coordinate=node_coordinate,
     )
@@ -3014,6 +2913,24 @@ async def health_check():
         "gates": len(ALL_GATES),
         "convergence": convergence,
         "timestamp": datetime.now(timezone.utc).isoformat()
+    }
+
+
+@app.get("/healthz")
+async def healthz():
+    return await health_check()
+
+
+@app.get("/readyz")
+async def readyz():
+    with get_db() as conn:
+        conn.execute("SELECT 1").fetchone()
+    return {
+        "status": "ready",
+        "agora": "dharmic",
+        "version": SAB_VERSION,
+        "db_path": str(AGORA_DB),
+        "timestamp": datetime.now(timezone.utc).isoformat(),
     }
 
 
