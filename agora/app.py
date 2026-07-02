@@ -683,7 +683,7 @@ def _message_for_witness(spark_id: int, witness_id: str, action: str, payload_sh
 
 
 def _verify_agent_signature(conn: sqlite3.Connection, agent_id: str, message: bytes, signature_hex: str) -> None:
-    row = conn.execute(f"SELECT public_key FROM {WEB_AGENT_TABLE} WHERE id = ?", (agent_id,)).fetchone()
+    row = conn.execute(f"SELECT public_key FROM {WEB_AGENT_TABLE} WHERE id = ?", (agent_id,)).fetchone()  # nosec B608 - WEB_AGENT_TABLE is a fixed module constant, value is parameterized
     if row is None:
         raise HTTPException(status_code=404, detail=f"Unknown agent: {agent_id}")
 
@@ -722,7 +722,7 @@ def _append_witness(
     related_link_ids_json = encode_related_link_ids(normalized_related)
 
     prev_row = conn.execute(
-        f"SELECT hash FROM {SPARK_WITNESS_TABLE} WHERE spark_id IS ? ORDER BY id DESC LIMIT 1",
+        f"SELECT hash FROM {SPARK_WITNESS_TABLE} WHERE spark_id IS ? ORDER BY id DESC LIMIT 1",  # nosec B608 - SPARK_WITNESS_TABLE is a fixed module constant, value is parameterized
         (spark_id,),
     ).fetchone()
     prev_hash = str(prev_row["hash"]) if prev_row else "genesis"
@@ -993,7 +993,7 @@ def _spark_chain_payload(conn: sqlite3.Connection, spark_id: int) -> Dict[str, A
         FROM spark_challenges
         WHERE spark_id IN ({placeholders})
         ORDER BY spark_id ASC, id ASC
-        """,
+        """,  # nosec B608 - placeholders is a "?"-only string sized to a list length, all values parameterized
         tuple(challenge_spark_ids),
     ).fetchall()
     entries = [_serialize_public_witness_row(row) for row in rows]
@@ -1209,7 +1209,7 @@ async def register_agent(req: AgentRegisterRequest) -> Dict[str, Any]:
             """,
             (agent_id, req.name, req.public_key, created_at),
         )
-        row = conn.execute(f"SELECT * FROM {WEB_AGENT_TABLE} WHERE id = ?", (agent_id,)).fetchone()
+        row = conn.execute(f"SELECT * FROM {WEB_AGENT_TABLE} WHERE id = ?", (agent_id,)).fetchone()  # nosec B608 - WEB_AGENT_TABLE is a fixed module constant, value is parameterized
     if row is None:
         raise HTTPException(status_code=500, detail="failed to register agent")
     return {
@@ -1230,7 +1230,7 @@ async def submit_spark(req: SparkSubmitRequest) -> Dict[str, Any]:
         _verify_agent_signature(conn, req.author_id, submit_message, req.signature)
 
         agent_row = conn.execute(
-            f"SELECT id, name, created_at FROM {WEB_AGENT_TABLE} WHERE id = ?",
+            f"SELECT id, name, created_at FROM {WEB_AGENT_TABLE} WHERE id = ?",  # nosec B608 - WEB_AGENT_TABLE is a fixed module constant, value is parameterized
             (req.author_id,),
         ).fetchone()
         if agent_row is None:
@@ -1354,7 +1354,7 @@ async def get_spark(spark_id: int) -> Dict[str, Any]:
         )
         witness_count = int(
             conn.execute(
-                f"SELECT COUNT(*) AS c FROM {SPARK_WITNESS_TABLE} WHERE spark_id = ?",
+                f"SELECT COUNT(*) AS c FROM {SPARK_WITNESS_TABLE} WHERE spark_id = ?",  # nosec B608 - SPARK_WITNESS_TABLE is a fixed module constant, value is parameterized
                 (spark_id,),
             ).fetchone()["c"]
         )
@@ -1489,7 +1489,7 @@ async def sublate_challenge(
         _verify_agent_signature(conn, req.corrector_id, sublation_message, req.signature)
 
         corrector_row = conn.execute(
-            f"SELECT id, name, created_at FROM {WEB_AGENT_TABLE} WHERE id = ?",
+            f"SELECT id, name, created_at FROM {WEB_AGENT_TABLE} WHERE id = ?",  # nosec B608 - WEB_AGENT_TABLE is a fixed module constant, value is parameterized
             (req.corrector_id,),
         ).fetchone()
         if corrector_row is None:
@@ -2047,7 +2047,7 @@ async def web_seed(request: Request) -> HTMLResponse:
                     FROM spark_challenges
                     WHERE spark_id IN ({placeholders})
                     ORDER BY spark_id ASC, id ASC
-                    """,
+                    """,  # nosec B608 - placeholders is a "?"-only string sized to a list length, all values parameterized
                     tuple(challenge_spark_ids),
                 ).fetchall()
                 challenges = [_serialize_challenge_row(row) for row in challenge_rows]
@@ -2331,7 +2331,7 @@ async def web_agent_profile(request: Request, agent_id: str) -> HTMLResponse:
     init_db()
     with _db() as conn:
         agent = conn.execute(
-            f"SELECT id, name, public_key, created_at, witness_count, witness_accuracy FROM {WEB_AGENT_TABLE} WHERE id = ?",
+            f"SELECT id, name, public_key, created_at, witness_count, witness_accuracy FROM {WEB_AGENT_TABLE} WHERE id = ?",  # nosec B608 - WEB_AGENT_TABLE is a fixed module constant, value is parameterized
             (agent_id,),
         ).fetchone()
         if agent is None:
