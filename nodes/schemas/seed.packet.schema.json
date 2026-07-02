@@ -1,0 +1,164 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sab.local/schemas/seed.packet.schema.json",
+  "title": "SAB Seed Packet",
+  "type": "object",
+  "required": [
+    "seed_id",
+    "seed_type",
+    "title",
+    "status",
+    "loop_position",
+    "north_star",
+    "claim",
+    "challenge_plan",
+    "witness_plan",
+    "build_plan",
+    "authority_lease",
+    "anti_capture_rules",
+    "commons_return",
+    "canon_compost_policy",
+    "created_at"
+  ],
+  "properties": {
+    "seed_id": { "type": "string", "minLength": 3 },
+    "seed_type": {
+      "type": "string",
+      "enum": [
+        "project",
+        "company",
+        "lab",
+        "governance",
+        "crypto_protocol",
+        "model_training",
+        "ecology",
+        "commerce_trading"
+      ]
+    },
+    "title": { "type": "string", "minLength": 5 },
+    "status": {
+      "type": "string",
+      "enum": ["draft", "spark", "challenge", "witness", "standing", "build", "deployed", "canon", "compost"]
+    },
+    "loop_position": {
+      "type": "string",
+      "enum": ["spark", "challenge", "witness", "standing", "build", "deploy", "learn_earn", "fund", "canon_compost"]
+    },
+    "north_star": {
+      "type": "string",
+      "enum": [
+        "deepen_truth",
+        "improve_coordination",
+        "harden_governance",
+        "increase_production_capacity",
+        "feed_value_back_to_commons"
+      ]
+    },
+    "claim": {
+      "type": "object",
+      "required": ["text", "scope", "success_conditions", "failure_conditions"],
+      "properties": {
+        "text": { "type": "string", "minLength": 10 },
+        "scope": { "type": "string", "minLength": 5 },
+        "success_conditions": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string" }
+        },
+        "failure_conditions": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string" }
+        }
+      },
+      "additionalProperties": false
+    },
+    "challenge_plan": {
+      "type": "object",
+      "required": ["required", "challenge_refs", "strongest_objections"],
+      "properties": {
+        "required": { "type": "boolean" },
+        "challenge_refs": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "strongest_objections": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string" }
+        }
+      },
+      "additionalProperties": false
+    },
+    "witness_plan": {
+      "type": "object",
+      "required": ["required_roles", "non_adjacent_required"],
+      "properties": {
+        "required_roles": {
+          "type": "array",
+          "minItems": 2,
+          "items": { "type": "string" }
+        },
+        "non_adjacent_required": { "type": "boolean" }
+      },
+      "additionalProperties": false
+    },
+    "build_plan": {
+      "type": "object",
+      "required": ["artifact_refs", "production_grade_definition"],
+      "properties": {
+        "artifact_refs": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string" }
+        },
+        "production_grade_definition": { "type": "string", "minLength": 10 }
+      },
+      "additionalProperties": false
+    },
+    "authority_lease": {
+      "type": "object",
+      "required": ["scope", "expires_at", "revoker", "challenge_path"],
+      "properties": {
+        "scope": { "type": "string", "minLength": 5 },
+        "expires_at": { "type": "string", "minLength": 10 },
+        "revoker": { "type": "string", "minLength": 3 },
+        "challenge_path": { "type": "string", "minLength": 3 }
+      },
+      "additionalProperties": false
+    },
+    "anti_capture_rules": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "type": "string" }
+    },
+    "commons_return": {
+      "type": "object",
+      "required": ["mode", "minimum_return"],
+      "properties": {
+        "mode": { "type": "string", "minLength": 3 },
+        "minimum_return": { "type": "string", "minLength": 5 }
+      },
+      "additionalProperties": false
+    },
+    "canon_compost_policy": {
+      "type": "object",
+      "required": ["canon_conditions", "compost_conditions"],
+      "properties": {
+        "canon_conditions": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string" }
+        },
+        "compost_conditions": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string" }
+        }
+      },
+      "additionalProperties": false
+    },
+    "created_at": { "type": "string", "minLength": 10 }
+  },
+  "additionalProperties": false
+}

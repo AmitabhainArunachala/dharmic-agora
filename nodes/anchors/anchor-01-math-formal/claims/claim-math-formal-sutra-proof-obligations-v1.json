@@ -37,6 +37,7 @@
   ],
   "replaces_prior_frame": false,
   "requested_stage": "paper_internal_draft",
+  "scope": "Internal paper-stage claim about formal proof obligations for SAB claim promotion semantics and witness consistency.",
   "status": "witnessed",
   "summary": "Define proof obligations for stage transitions and witness consistency in claim promotion.",
   "threshold_completed_at": "2026-02-03T14:07:55.066361+00:00",

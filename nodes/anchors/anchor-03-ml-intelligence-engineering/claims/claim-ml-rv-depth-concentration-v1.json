@@ -37,6 +37,7 @@
   ],
   "replaces_prior_frame": false,
   "requested_stage": "paper_internal_draft",
+  "scope": "Internal paper-stage claim about RV contraction depth concentration across model architectures.",
   "status": "witnessed",
   "summary": "Run cross-architecture measurement to test whether RV contraction concentrates in late-depth layers.",
   "threshold_completed_at": "2026-02-03T14:07:55.066508+00:00",

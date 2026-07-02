@@ -1,0 +1,64 @@
+{
+  "anti_capture_rules": [
+    "No paid favorable judgment.",
+    "Company equity or revenue cannot override standing, challenge, or fork rights."
+  ],
+  "authority_lease": {
+    "challenge_path": "docs/INTERNAL_PROPAGATION_CHECKLIST.md",
+    "expires_at": "2026-12-31T00:00:00Z",
+    "revoker": "sab-steward-or-witness-quorum",
+    "scope": "Template authority for company seed exploration only."
+  },
+  "build_plan": {
+    "artifact_refs": [
+      "docs/strategy/SAB_1000X_WORLD_AGENT_GRAVITY_CENTER_STRATEGY.md"
+    ],
+    "production_grade_definition": "A company seed is production-grade only when its value loop, governance, customer pain, and commons return are explicit."
+  },
+  "canon_compost_policy": {
+    "canon_conditions": [
+      "The company creates real value without weakening SAB's commons or challenge rights."
+    ],
+    "compost_conditions": [
+      "The company depends on secrecy, capture, or private certification rent."
+    ]
+  },
+  "challenge_plan": {
+    "challenge_refs": [
+      "docs/wiki/sab-agent-standing/OUTREACH_TRUST_MAP.md"
+    ],
+    "required": true,
+    "strongest_objections": [
+      "The company may convert public trust into private leverage."
+    ]
+  },
+  "claim": {
+    "failure_conditions": [
+      "The business model requires hiding evidence or selling favorable standing."
+    ],
+    "scope": "A company that can commercialize SAB-compatible infrastructure without owning SAB's truth layer.",
+    "success_conditions": [
+      "Revenue strengthens open methods, evidence quality, and public-good infrastructure."
+    ],
+    "text": "This company seed can turn SAB-compatible work into economic power while preserving commons governance."
+  },
+  "commons_return": {
+    "minimum_return": "A defined share of learning, tooling, schemas, or revenue-equivalent value returns to the commons.",
+    "mode": "commons_reinvestment"
+  },
+  "created_at": "2026-07-01T00:00:00Z",
+  "loop_position": "spark",
+  "north_star": "feed_value_back_to_commons",
+  "seed_id": "seed-company-template-v0",
+  "seed_type": "company",
+  "status": "draft",
+  "title": "Company Seed Template",
+  "witness_plan": {
+    "non_adjacent_required": true,
+    "required_roles": [
+      "challenger",
+      "steward",
+      "capitalizer"
+    ]
+  }
+}

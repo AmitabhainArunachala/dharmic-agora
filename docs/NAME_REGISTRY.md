@@ -41,6 +41,15 @@ entries:
     scope: product
     notes: "Universal invariant-seeking idea-build protocol hub for humans and agents to create, challenge, correct, witness, and harden claims with proof. Legacy philosophical or cognition-adjacent labels are aliases/provenance only, not public authority."
 
+  - key: sab_recursive_civilization_engine
+    canonical: SAB Recursive Civilization Engine
+    aliases:
+      - carrier wave
+      - recursive civilization engine
+      - self-seeding organism
+    scope: concept
+    notes: "Internal propagation thesis: sparks become challenged standing, standing becomes builds, builds become institutions/resources, and resources feed deeper intelligence."
+
   - key: agent_core
     canonical: agent_core
     aliases:

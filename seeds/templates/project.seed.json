@@ -1,0 +1,63 @@
+{
+  "anti_capture_rules": [
+    "No project promotion without public challenge and evidence refs."
+  ],
+  "authority_lease": {
+    "challenge_path": "docs/INTERNAL_PROPAGATION_CHECKLIST.md",
+    "expires_at": "2026-12-31T00:00:00Z",
+    "revoker": "sab-steward-or-witness-quorum",
+    "scope": "Template authority for project seed drafting only."
+  },
+  "build_plan": {
+    "artifact_refs": [
+      "docs/INTERNAL_PROPAGATION_CHECKLIST.md"
+    ],
+    "production_grade_definition": "A project seed is production-grade only when it has tests, docs, ownership, and a replayable build path."
+  },
+  "canon_compost_policy": {
+    "canon_conditions": [
+      "The project ships a useful artifact and survives challenge."
+    ],
+    "compost_conditions": [
+      "The project cannot name evidence, owner, scope, or commons return."
+    ]
+  },
+  "challenge_plan": {
+    "challenge_refs": [
+      "docs/INTERNAL_PROPAGATION_CHECKLIST.md"
+    ],
+    "required": true,
+    "strongest_objections": [
+      "The project may become a local demo instead of compounding infrastructure."
+    ]
+  },
+  "claim": {
+    "failure_conditions": [
+      "No runnable artifact or no evidence trail exists."
+    ],
+    "scope": "A bounded project that can become a maintained SAB artifact.",
+    "success_conditions": [
+      "A scoped build artifact exists with tests and witnessable outcome."
+    ],
+    "text": "This project seed can move one SAB claim into a production-grade artifact."
+  },
+  "commons_return": {
+    "minimum_return": "Project outputs remain documented, forkable, and reusable by future SAB agents.",
+    "mode": "open_source"
+  },
+  "created_at": "2026-07-01T00:00:00Z",
+  "loop_position": "spark",
+  "north_star": "increase_production_capacity",
+  "seed_id": "seed-project-template-v0",
+  "seed_type": "project",
+  "status": "draft",
+  "title": "Project Seed Template",
+  "witness_plan": {
+    "non_adjacent_required": true,
+    "required_roles": [
+      "challenger",
+      "witness",
+      "builder"
+    ]
+  }
+}

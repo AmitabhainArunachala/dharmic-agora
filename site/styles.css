@@ -235,3 +235,140 @@ code {
   }
 }
 
+.standing-body {
+  background:
+    linear-gradient(140deg, rgba(14, 43, 48, 0.92), rgba(13, 18, 31, 0.98) 46%, rgba(45, 33, 22, 0.92)),
+    var(--bg-0);
+}
+
+.standing-shell {
+  width: min(1160px, 92vw);
+  margin: 0 auto;
+  padding: 1.2rem 0 4rem;
+}
+
+.topline {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  align-items: center;
+  justify-content: flex-end;
+  padding: 0.5rem 0 1.2rem;
+  font-family: "Avenir Next Condensed", "Gill Sans", "Trebuchet MS", sans-serif;
+}
+
+.topline a {
+  border: 1px solid rgba(216, 245, 255, 0.22);
+  border-radius: 999px;
+  color: #f1efea;
+  font-size: 0.82rem;
+  letter-spacing: 0.03em;
+  padding: 0.32rem 0.66rem;
+  text-decoration: none;
+  text-transform: uppercase;
+}
+
+.standing-hero {
+  min-height: min(78vh, 760px);
+  display: grid;
+  align-content: center;
+  padding: 4rem 0 3rem;
+  border-bottom: 1px solid rgba(216, 245, 255, 0.18);
+}
+
+.standing-hero h1 {
+  max-width: 980px;
+  font-size: clamp(2.3rem, 6vw, 5.4rem);
+  letter-spacing: 0;
+}
+
+.standing-hero .lead {
+  max-width: 850px;
+  font-size: clamp(1rem, 2vw, 1.3rem);
+}
+
+.standing-band {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1.4rem;
+  padding: 2.4rem 0;
+  border-bottom: 1px solid rgba(216, 245, 255, 0.18);
+}
+
+.standing-band p,
+.standing-grid p,
+.standing-diagram p,
+.standing-callout p {
+  color: var(--ink-1);
+}
+
+.standing-diagram {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.75rem;
+  padding: 2.2rem 0;
+}
+
+.standing-diagram article,
+.standing-grid article {
+  border: 1px solid rgba(216, 245, 255, 0.2);
+  border-radius: 8px;
+  background: rgba(8, 16, 29, 0.58);
+  padding: 1rem;
+}
+
+.standing-diagram span {
+  display: inline-grid;
+  place-items: center;
+  width: 2rem;
+  height: 2rem;
+  margin-bottom: 0.85rem;
+  border-radius: 50%;
+  background: #76b8ba;
+  color: #08101d;
+  font-family: "SF Mono", ui-monospace, Menlo, Monaco, Consolas, monospace;
+  font-weight: 700;
+}
+
+.standing-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.9rem;
+  padding: 0 0 2.2rem;
+}
+
+.standing-grid ul {
+  margin: 0.7rem 0 0;
+  padding-left: 1.15rem;
+  color: var(--ink-1);
+}
+
+.standing-grid li + li {
+  margin-top: 0.35rem;
+}
+
+.standing-callout {
+  padding: 2.4rem 0 0;
+  border-top: 1px solid rgba(216, 245, 255, 0.18);
+}
+
+.standing-callout h2 {
+  font-size: clamp(1.8rem, 4vw, 3.5rem);
+}
+
+@media (max-width: 900px) {
+  .topline {
+    justify-content: flex-start;
+  }
+
+  .standing-band,
+  .standing-grid,
+  .standing-diagram {
+    grid-template-columns: 1fr;
+  }
+
+  .standing-hero {
+    min-height: auto;
+    padding: 2.5rem 0 2rem;
+  }
+}

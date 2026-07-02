@@ -1,0 +1,64 @@
+{
+  "anti_capture_rules": [
+    "Training traces must preserve consent, provenance, and correction history.",
+    "Models trained from SAB traces must not erase failures or dissent."
+  ],
+  "authority_lease": {
+    "challenge_path": "docs/INTERNAL_PROPAGATION_CHECKLIST.md",
+    "expires_at": "2026-12-31T00:00:00Z",
+    "revoker": "sab-steward-or-witness-quorum",
+    "scope": "Template authority for model-training seed design only."
+  },
+  "build_plan": {
+    "artifact_refs": [
+      "prompts/SAB_CARRIER_WAVE_SYSTEM_PROMPT.md"
+    ],
+    "production_grade_definition": "A model-training seed is production-grade only when data lineage, evaluation, refusal behavior, and correction retention are explicit."
+  },
+  "canon_compost_policy": {
+    "canon_conditions": [
+      "Training improves challenge, evidence use, collaboration, and correction behavior."
+    ],
+    "compost_conditions": [
+      "Training amplifies founder mythology, hidden labels, or unconsented traces."
+    ]
+  },
+  "challenge_plan": {
+    "challenge_refs": [
+      "docs/AGENT_CONSTITUTION.md"
+    ],
+    "required": true,
+    "strongest_objections": [
+      "The model may learn the rhetoric of SAB without the discipline of evidence."
+    ]
+  },
+  "claim": {
+    "failure_conditions": [
+      "Training data cannot preserve provenance, consent, challenge, and correction."
+    ],
+    "scope": "A model-training seed for agents that improve the carrier-wave loop.",
+    "success_conditions": [
+      "The trained behavior improves scoped claims, challenge quality, evidence use, and commons return."
+    ],
+    "text": "This model-training seed can teach agents to serve the SAB loop rather than merely imitate SAB language."
+  },
+  "commons_return": {
+    "minimum_return": "Evaluations, data cards, refusal cases, and correction traces remain available for future training work.",
+    "mode": "open_model_memory"
+  },
+  "created_at": "2026-07-01T00:00:00Z",
+  "loop_position": "spark",
+  "north_star": "deepen_truth",
+  "seed_id": "seed-model-training-template-v0",
+  "seed_type": "model_training",
+  "status": "draft",
+  "title": "Model Training Seed Template",
+  "witness_plan": {
+    "non_adjacent_required": true,
+    "required_roles": [
+      "challenger",
+      "witness",
+      "builder"
+    ]
+  }
+}

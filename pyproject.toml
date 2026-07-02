@@ -65,7 +65,7 @@ Issues = "https://github.com/shakti-saraswati/dharmic-agora/issues"
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["agora*"]
+include = ["agora*", "connectors"]
 
 [tool.black]
 line-length = 100

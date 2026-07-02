@@ -14,9 +14,14 @@ Then open:
 
 `http://localhost:8080/site/`
 
+Key pages:
+
+- `site/index.html`: Anchor 7 + seed claim field surface
+- `site/standing.html`: SAB agent standing public page
+
 ## Scope (v0)
 
 - Anchor 7 index
 - seed claim cards
 - explicit governance and claim-scaling entry points
-
+- agent standing thesis, standard, wiki, and strategy links

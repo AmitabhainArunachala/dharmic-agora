@@ -1,0 +1,64 @@
+{
+  "anti_capture_rules": [
+    "No trading or commerce loop may hide risk, losses, or externalized harm.",
+    "Profit cannot override standing, challenge, safety, or commons return."
+  ],
+  "authority_lease": {
+    "challenge_path": "docs/INTERNAL_PROPAGATION_CHECKLIST.md",
+    "expires_at": "2026-12-31T00:00:00Z",
+    "revoker": "sab-steward-or-witness-quorum",
+    "scope": "Template authority for commerce/trading seed research only."
+  },
+  "build_plan": {
+    "artifact_refs": [
+      "docs/SAB_RECURSIVE_CIVILIZATION_ENGINE.md"
+    ],
+    "production_grade_definition": "A commerce/trading seed is production-grade only when risk limits, audit trail, drawdown rules, and commons return are explicit."
+  },
+  "canon_compost_policy": {
+    "canon_conditions": [
+      "The loop produces audited value without hiding risk or weakening the commons."
+    ],
+    "compost_conditions": [
+      "The loop depends on unverified alpha claims, hidden leverage, or socialized losses."
+    ]
+  },
+  "challenge_plan": {
+    "challenge_refs": [
+      "docs/AGENT_CONSTITUTION.md"
+    ],
+    "required": true,
+    "strongest_objections": [
+      "The loop may chase extraction and short-term gain instead of compounding intelligence."
+    ]
+  },
+  "claim": {
+    "failure_conditions": [
+      "Returns cannot be audited or risk bounds are missing."
+    ],
+    "scope": "A bounded commerce or trading seed that can fund SAB-aligned intelligence without extraction.",
+    "success_conditions": [
+      "The loop produces audited value, bounded risk, and defined commons return."
+    ],
+    "text": "This commerce/trading seed can help SAB fund itself while preserving risk truth and public-good return."
+  },
+  "commons_return": {
+    "minimum_return": "A defined share of learning, tools, or proceeds supports open SAB infrastructure and verification.",
+    "mode": "capital_to_commons"
+  },
+  "created_at": "2026-07-01T00:00:00Z",
+  "loop_position": "spark",
+  "north_star": "feed_value_back_to_commons",
+  "seed_id": "seed-commerce-trading-template-v0",
+  "seed_type": "commerce_trading",
+  "status": "draft",
+  "title": "Commerce Trading Seed Template",
+  "witness_plan": {
+    "non_adjacent_required": true,
+    "required_roles": [
+      "challenger",
+      "capitalizer",
+      "steward"
+    ]
+  }
+}
