@@ -22,6 +22,7 @@ Environment variables:
   AGNI_HOST_PORT          Host port mapped to app (default: 8800)
   AGNI_CONTAINER_PORT     Container internal app port (default: 8000)
   AGNI_DATA_DIR           Host data dir mount (default: /home/openclaw/dharmic-agora-data)
+  AGNI_DB_PATH            In-container SAB authority DB path (default: /app/data/sabp.db)
   AGNI_LOG_DIR            Host log dir mount (default: /home/openclaw/dharmic-agora-logs)
   AGNI_HEALTH_PATH        Health path (default: /api/node/status)
   AGNI_ROOT_PATH          Root probe path (default: /)
@@ -60,6 +61,7 @@ AGNI_CONTAINER_NAME="${AGNI_CONTAINER_NAME:-dharmic-agora}"
 AGNI_HOST_PORT="${AGNI_HOST_PORT:-8800}"
 AGNI_CONTAINER_PORT="${AGNI_CONTAINER_PORT:-8000}"
 AGNI_DATA_DIR="${AGNI_DATA_DIR:-/home/openclaw/dharmic-agora-data}"
+AGNI_DB_PATH="${AGNI_DB_PATH:-/app/data/sabp.db}"
 AGNI_LOG_DIR="${AGNI_LOG_DIR:-/home/openclaw/dharmic-agora-logs}"
 AGNI_HEALTH_PATH="${AGNI_HEALTH_PATH:-/api/node/status}"
 AGNI_ROOT_PATH="${AGNI_ROOT_PATH:-/}"
@@ -80,6 +82,7 @@ echo "  branch=${AGNI_BRANCH}"
 echo "  image=${AGNI_IMAGE}"
 echo "  container=${AGNI_CONTAINER_NAME}"
 echo "  port=${AGNI_HOST_PORT}->${AGNI_CONTAINER_PORT}"
+echo "  db_path=${AGNI_DB_PATH}"
 echo "  health_path=${AGNI_HEALTH_PATH}"
 echo "  no_build=${NO_BUILD}"
 
@@ -91,6 +94,7 @@ ssh "${AGNI_SSH_TARGET}" bash -s -- \
   "${AGNI_HOST_PORT}" \
   "${AGNI_CONTAINER_PORT}" \
   "${AGNI_DATA_DIR}" \
+  "${AGNI_DB_PATH}" \
   "${AGNI_LOG_DIR}" \
   "${AGNI_HEALTH_PATH}" \
   "${AGNI_ROOT_PATH}" \
@@ -106,12 +110,13 @@ IMAGE_NAME="$4"
 HOST_PORT="$5"
 CONTAINER_PORT="$6"
 DATA_DIR="$7"
-LOG_DIR="$8"
-HEALTH_PATH="$9"
-ROOT_PATH="${10}"
-TIMEOUT_SECONDS="${11}"
-RESTORE_BRANCH="${12}"
-NO_BUILD="${13}"
+DB_PATH="$8"
+LOG_DIR="$9"
+HEALTH_PATH="${10}"
+ROOT_PATH="${11}"
+TIMEOUT_SECONDS="${12}"
+RESTORE_BRANCH="${13}"
+NO_BUILD="${14}"
 
 cd "${REPO_PATH}"
 PREV_BRANCH="$(git rev-parse --abbrev-ref HEAD)"
@@ -140,6 +145,7 @@ chown -R 1000:1000 "${DATA_DIR}" "${LOG_DIR}" || true
 docker rm -f "${CONTAINER_NAME}" >/dev/null 2>&1 || true
 docker run -d --name "${CONTAINER_NAME}" --restart unless-stopped \
   -p "${HOST_PORT}:${CONTAINER_PORT}" \
+  -e "SAB_AUTHORITY_DB_PATH=${DB_PATH}" \
   -v "${DATA_DIR}:/app/data" \
   -v "${LOG_DIR}:/app/logs" \
   "${IMAGE_NAME}" >/tmp/"${CONTAINER_NAME}".cid

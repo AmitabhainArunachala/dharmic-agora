@@ -35,6 +35,10 @@ jobs:
       run: |
         python3 scripts/enforce_claim_promotions.py --require-stage --fail-on-no-claims
 
+    - name: Enforce gate singularity
+      run: |
+        python3 scripts/check_gate_singularity.py
+
     - name: Shadow loop runtime check
       run: |
         python3 scripts/orthogonal_safety_loop.py --output-dir /tmp/shadow_loop_ci
@@ -92,7 +96,7 @@ jobs:
         if counts["HIGH"] > 0 or counts["MEDIUM"] > 0:
             raise SystemExit("Bandit found HIGH/MEDIUM findings; failing CI.")
         PY
-        safety check
+        safety check -r requirements.txt -r requirements-dev.txt
 
   lint:
     runs-on: ubuntu-latest

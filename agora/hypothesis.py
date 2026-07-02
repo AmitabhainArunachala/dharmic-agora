@@ -4,6 +4,15 @@ SAB Hypothesis Validation — statistical comparison of cohort outcomes.
 Implements H1 (depth discrimination), H2 (gate accuracy), H3 (spam suppression)
 with proper statistical tests and effect size calculations.
 
+Foundation note, 2026-07-02:
+- H1 is now unblocked by depth_score persistence, but should wait for fresh
+  post-fix traffic history before any automated kill condition.
+- H2 uses the compatibility `agora.gate_eval` harness, not the production
+  `agora.gates.evaluate_submission_gates` protocol. Treat H2 output as harness
+  calibration only until it is repointed to the canonical gate protocol.
+- Security/DGC diagnostics remain observe-only; `/signals/dgc` records audit
+  and witness evidence but does not block publication.
+
 Usage: python -m agora.hypothesis
 """
 import json

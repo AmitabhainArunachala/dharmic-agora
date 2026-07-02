@@ -13,12 +13,14 @@ from typing import Any, Dict, List, Optional
 
 try:
     from .config import get_db_path
+    from .depth import calculate_depth_score
     from .models import ModerationStatus
     from .witness import WitnessChain
 except ImportError:  # Allow running as script
     import sys
     sys.path.insert(0, str(Path(__file__).parent.parent))
     from agora.config import get_db_path
+    from agora.depth import calculate_depth_score
     from agora.models import ModerationStatus
     from agora.witness import WitnessChain
 
@@ -74,11 +76,13 @@ class ModerationStore:
                     published_content_id INTEGER,
                     signature TEXT,
                     signed_at TEXT,
+                    depth_score REAL,
                     submission_kind TEXT NOT NULL DEFAULT 'general',
                     node_coordinate TEXT
                 )
                 """
             )
+            ensure_column("moderation_queue", "depth_score", "depth_score REAL")
             ensure_column(
                 "moderation_queue",
                 "submission_kind",
@@ -104,6 +108,7 @@ class ModerationStore:
         parent_id: Optional[int] = None,
         signature: Optional[str] = None,
         signed_at: Optional[str] = None,
+        depth_score: Optional[float] = None,
         submission_kind: str = "general",
         node_coordinate: Optional[str] = None,
     ) -> Dict[str, Any]:
@@ -115,8 +120,9 @@ class ModerationStore:
                 INSERT INTO moderation_queue (
                     content_type, content, author_address, gate_evidence_hash,
                     gate_results_json, status, reason, created_at, post_id,
-                    parent_id, signature, signed_at, submission_kind, node_coordinate
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    parent_id, signature, signed_at, depth_score, submission_kind,
+                    node_coordinate
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     content_type,
@@ -131,6 +137,7 @@ class ModerationStore:
                     parent_id,
                     signature,
                     signed_at,
+                    depth_score,
                     submission_kind,
                     node_coordinate,
                 ),
@@ -191,6 +198,9 @@ class ModerationStore:
             created_at = item["created_at"]
             published_id = item.get("published_content_id")
             if not published_id:
+                depth_score = item.get("depth_score")
+                if depth_score is None:
+                    depth_score = float(calculate_depth_score(item["content"])["composite"])
                 if item["content_type"] == "post":
                     cursor.execute(
                         """
@@ -201,10 +211,11 @@ class ModerationStore:
                             created_at,
                             signature,
                             signed_at,
+                            depth_score,
                             submission_kind,
                             node_coordinate
                         )
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                         """,
                         (
                             item["content"],
@@ -213,6 +224,7 @@ class ModerationStore:
                             created_at,
                             item.get("signature"),
                             item.get("signed_at"),
+                            depth_score,
                             item.get("submission_kind", "general"),
                             item.get("node_coordinate"),
                         ),
@@ -230,10 +242,11 @@ class ModerationStore:
                             created_at,
                             signature,
                             signed_at,
+                            depth_score,
                             submission_kind,
                             node_coordinate
                         )
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                         """,
                         (
                             item["post_id"],
@@ -244,6 +257,7 @@ class ModerationStore:
                             created_at,
                             item.get("signature"),
                             item.get("signed_at"),
+                            depth_score,
                             item.get("submission_kind", "general"),
                             item.get("node_coordinate"),
                         ),

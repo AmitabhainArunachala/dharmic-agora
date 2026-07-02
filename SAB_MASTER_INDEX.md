@@ -1,0 +1,152 @@
+# SAB Master Index
+
+Last audited: 2026-07-02
+Local audit repo: `/Users/dhyana/dharmic-agora`
+
+## Forensics
+
+Primary Phase 0 artifact:
+- Path: `/Users/dhyana/sab-forensics/sab-forensics-20260702T024605Z.tgz`
+- SHA256: `98982d5a675d2cc2e7dedcf62e30bb46721024f7f8f777141ce385f9387f6775`
+
+Supplemental artifact for extra Agni workspaces:
+- Path: `/Users/dhyana/sab-forensics/sab-forensics-supplemental-20260702T024921Z.tgz`
+- SHA256: `28602c13d9297b140ea05a192346dca3e3e7ed8816428911b2303a0ffec680ff`
+
+The artifacts preserve git status/diff manifests, untracked file archives, a live-safe SQLite backup of `sabp.db`, a full live `data/` copy, systemd status, and credential inventories by path/size/mtime only.
+
+## Canonical Repository
+
+Canonical working repo for this audit:
+- Path: `/Users/dhyana/dharmic-agora`
+- Working branch: `codex/sab-foundation-hardening-20260702`
+- Base branch: `origin/main`
+- Base SHA: `1c71b93a834a7e3e50e246012df61cc9fc40ba0a`
+- Primary remote: `origin https://github.com/AmitabhainArunachala/dharmic-agora.git`
+- Secondary remote to retire: `shakti-saraswati https://github.com/shakti-saraswati/dharmic-agora.git`
+
+Branch policy:
+- `main` is the merge target.
+- Feature and fix work happens on PR branches.
+- Production redeploys come only from reviewed, merged `main`.
+- No direct edits in production checkouts.
+
+Open naming conflict:
+- `pyproject.toml` still points project URLs at `shakti-saraswati/dharmic-agora`.
+- The current canonical remote in this checkout is `AmitabhainArunachala/dharmic-agora`.
+- Do not treat the old remote as authority unless the owner explicitly reassigns it.
+
+## Runtime Surfaces
+
+SAB has two intentional FastAPI surfaces:
+- Public Basin Shell: `agora.app:app`
+  - public feed, submit, spark detail, canon, compost, register
+  - default DB: `data/spark.db`
+- Protocol / Operator Surface: `agora.api_server:app`
+  - auth, posts, queue, moderation, governance, federation, health
+  - default DB: `data/sabp.db`
+
+Convergence seam:
+- `SAB_AUTHORITY_DB_PATH` points both surfaces at one SQLite authority path.
+- Agni deploy artifacts should use `/app/data/sabp.db`.
+
+## Where Production Runs
+
+Observed from Phase 0 forensics:
+- Host label: `agni-openclaw`
+- Service: `sab-agora.service`
+- Live service file: `/etc/systemd/system/sab-agora.service`
+- Active process: `/usr/bin/python3 -m uvicorn agora.api_server:app --host 127.0.0.1 --port 8000 --workers 1`
+- Live working directory: `/home/openclaw/saraswati-dharmic-agora`
+- Live branch: `main`
+- Live HEAD: `3bdb408934f2265817a4ae3ccbfd0eade5867dcb`
+- Local backend port: `127.0.0.1:8000`
+- Public reverse proxy observed: Caddy on `*:80` and `*:443`
+
+Important drift:
+- Live production runs `agora.api_server:app` from a dirty checkout.
+- Checked-in Docker deployment currently runs `agora.app:app`.
+- Deployment work must state which surface is being cut over before restart.
+
+## Deployment Checkouts
+
+Observed Agni repo copies:
+- `/home/openclaw/saraswati-dharmic-agora`
+  - live service path
+  - branch `main`
+  - HEAD `3bdb408934f2265817a4ae3ccbfd0eade5867dcb`
+  - dirty; preserve until all diffs are reviewed
+- `/home/openclaw/repos/saraswati-dharmic-agora`
+  - branch `codex/5h-bootstrap-hardening-clean`
+  - HEAD `eb0b819f3551bc7a89e4a9727721afaec02a0911`
+- `/root/repos/saraswati-dharmic-agora`
+  - branch `main`
+  - HEAD `9da6b5aa54664b4fcbec5c0b5b3fdb70b7f1a015`
+  - has untracked Shakti/Pinchbeck docs
+- `/home/openclaw/.openclaw/workspace/dharmic-agora`
+  - branch `main`
+  - HEAD `ee88d41`
+  - untracked federation/transport/DGM artifacts
+- `/home/openclaw/.openclaw/workspace/projects/dharmic-agora`
+  - branch `main`
+  - HEAD `f8af565`
+  - ahead 1 with modified deploy/API/auth files
+
+Recommended canonical deployment path after cleanup:
+- Use one non-root deploy checkout only.
+- Prefer `/home/openclaw/repos/saraswati-dharmic-agora` or a freshly named release path.
+- Retire dirty live checkouts only after diff preservation, merge decision, and at least one successful bake period.
+
+## Retired / Do Not Use As Source Of Truth
+
+- `/root/repos/saraswati-dharmic-agora`
+- `/home/openclaw/dharmic-agora`
+- `/home/openclaw/dharmic-agora-working`
+- `/home/openclaw/.openclaw/workspace/dharmic-agora`
+- `/home/openclaw/.openclaw/workspace/projects/dharmic-agora`
+- Any dirty production checkout except as forensic evidence
+
+## Data And Credential Inventory
+
+Credential paths only; never place secret contents in docs:
+- `/home/openclaw/dharmic-agora-data/.jwt_secret`
+- `/home/openclaw/dharmic-agora-data/.sab_system_ed25519.key`
+- `/home/openclaw/dharmic-agora-working/data/.jwt_secret`
+- `/home/openclaw/repos/saraswati-dharmic-agora/data/.jwt_secret`
+- `/home/openclaw/repos/saraswati-dharmic-agora/data/.sab_system_ed25519.key`
+- `/home/openclaw/saraswati-dharmic-agora/data/.jwt_secret`
+- `/home/openclaw/saraswati-dharmic-agora/data/.sab_system_ed25519.key`
+- `/home/openclaw/saraswati-dharmic-agora/.env.production`
+- `/home/openclaw/.openclaw/workspace/dharmic-agora/.env`
+
+Live data copy in forensics:
+- `spark.db`
+- `sabp.db`
+- `agora.db`
+- `.jwt_secret`
+- `.sab_system_ed25519.key`
+- `federation/`
+
+Forensic `sabp.db` row counts:
+- `posts`: 39
+- `comments`: 2
+- `moderation_queue`: 83
+- `witness_chain`: 41
+
+## PR To Merge To Redeploy Policy
+
+1. No direct edits in production checkouts.
+2. All changes start from canonical `main` on a feature branch.
+3. Open a PR and run tests before merge.
+4. Review runtime-surface impact: `agora.app:app`, `agora.api_server:app`, or both.
+5. Merge to `main` only after checks pass.
+6. Redeploy from clean `main`, not from a dirty live tree.
+7. Before the first redeploy after this audit, preserve Phase 0 dirty live diffs and decide what to merge, archive, or discard.
+8. After deploy, record deployed commit SHA, service unit, app target, DB path/env, health result, and rollback SHA.
+
+## Deferred Foundation Follow-Ups
+
+- Hypothesis kill conditions remain disabled. H1 needs fresh post-fix traffic history; H2 currently measures the compatibility gate harness, not the canonical production gate protocol.
+- DGC/security diagnostics are observe-only. `/signals/dgc` records audit and witness evidence for later baseline work but does not block publication.
+- Credential consolidation is deferred until after a successful production bake period; do not duplicate or rotate keys during the first cutover.
+- Agni stale checkout removal is deferred until all dirty diffs are reviewed and archived.

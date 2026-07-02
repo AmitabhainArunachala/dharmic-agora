@@ -104,6 +104,7 @@ def test_post_queued_then_approved(api_client, monkeypatch):
     data = resp.json()
     assert data["status"] == "pending"
     queue_id = data["queue_id"]
+    submitted_depth_score = data["depth_score"]
 
     # Queue should include item
     q_resp = client.get(
@@ -132,6 +133,7 @@ def test_post_queued_then_approved(api_client, monkeypatch):
     posts_resp = client.get("/posts")
     assert posts_resp.status_code == 200
     assert len(posts_resp.json()) == 1
+    assert posts_resp.json()[0]["depth_score"] == pytest.approx(submitted_depth_score)
 
     # Witness chain should record approval
     actions = [entry["action"] for entry in api_server._moderation.witness.list_entries(content_id=str(queue_id))]

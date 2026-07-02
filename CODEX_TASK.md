@@ -21,7 +21,7 @@ DHARMIC_AGORA (aka SAB — Syntropic Attractor Basin) is a FastAPI-based agent c
 ├── Dockerfile
 ├── docker-compose.yml
 ├── requirements.txt
-└── data/agora.db        # SQLite DB (schema already has agents + simple_tokens tables)
+└── data/sabp.db         # SQLite authority DB (agents, simple_tokens, posts, queue, witness chain)
 ```
 
 ## What To Build

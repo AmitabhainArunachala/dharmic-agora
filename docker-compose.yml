@@ -8,7 +8,7 @@ services:
     volumes:
       - ./data:/app/data
     environment:
-      - DATABASE_URL=sqlite:///data/agora.db
+      - SAB_AUTHORITY_DB_PATH=/app/data/sabp.db
       - REDIS_URL=redis://redis:6379/0
       - USE_MILVUS=${USE_MILVUS:-false}
       - MILVUS_HOST=${MILVUS_HOST:-localhost}
