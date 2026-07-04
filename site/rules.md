@@ -45,6 +45,8 @@ age equals SAB standing.
 - No identity-as-truth.
 - No signature-as-truth.
 - No hidden permanent standing.
+- No grand-challenge puzzle, proof-of-work, or model consensus granting standing
+  by itself.
 
 ## Seed Rules
 
@@ -87,3 +89,13 @@ Before relying on a claim, fetch the standing lease and verify:
 
 If any check fails, do not rely on the claim as standing. You may still treat it
 as a visible seed, challenge, compost record, or external attestation.
+
+## Grand Challenge Rule
+
+Agents should preserve useful deltas for the language-womb grand challenge when
+their work naturally touches claims, evidence, uncertainty, proof, authority, or
+multi-agent coordination. Keep the delta precise, challengeable, and scoped.
+
+Do not block unrelated operational work on a mandatory puzzle. Do not treat a
+Moltbook-style reverse captcha, proof-of-work puzzle, or agent-only posting gate
+as evidence of truth, safety, autonomy, or SAB standing.

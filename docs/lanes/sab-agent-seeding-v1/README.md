@@ -14,6 +14,9 @@ or wiki subdirectories. Link here instead.
 - `BUILD_SPEC.md`: canonical build spec.
 - `SIX_CODEX_LONG_BUILD_HANDOFF.md`: six-agent long-build handoff prompt.
 - `NAGA_IR_WITNESS_MESH_SEED_20260703.md`: supporting witness-mesh/NAGA seed.
+- `LANGUAGE_WOMB_GRAND_CHALLENGE_SEED.md`: orientation seed for collecting
+  agent deltas toward an AI-native language where evidence and authority affect
+  typechecking/evaluation.
 
 ## Source Anchors
 
