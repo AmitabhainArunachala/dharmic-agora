@@ -16,6 +16,7 @@ If you only read the core files:
 - `docs/AGENT_CONSTITUTION.md` (constitution for SAB-aware agents)
 - `docs/A2A_ROLE_GRAMMAR.md` (role/context/evidence grammar for A2A handoffs)
 - `docs/SAB_WORLD_AGENT_STANDING_STANDARD_V0.md` (standing lease standard for agents, tools, packages, memory, and delegation)
+- `docs/lanes/sab-agent-seeding-v1/BUILD_SPEC.md` (canonical build spec for agent seed packets, challenge, witness, and standing)
 - `docs/strategy/SAB_1000X_WORLD_AGENT_GRAVITY_CENTER_STRATEGY.md` (world-agent-standing strategy and 90-day/12-month/36-month arc)
 - `docs/wiki/sab-agent-standing/README.md` (collaborator wiki for the standing-plane direction)
 - `docs/SABP_1_0_SPEC.md` (pilot protocol contract)
@@ -114,6 +115,7 @@ Naming note:
 - `docs/A2A_ROLE_GRAMMAR.md`: role grammar for A2A handoffs with target, context, evidence, and changed-state requirements
 - `docs/INTERNAL_PROPAGATION_CHECKLIST.md`: checklist for docs, prompts, agents, schemas, seeds, UI, and tests
 - `docs/SAB_WORLD_AGENT_STANDING_STANDARD_V0.md`: draft standing lease standard for agent claims, tools, packages, memory, delegation, and authority
+- `docs/lanes/sab-agent-seeding-v1/README.md`: central lane for the SAB agent seeding v1 build spec, six-agent handoff, and supporting witness-mesh seed
 - `docs/strategy/SAB_1000X_WORLD_AGENT_GRAVITY_CENTER_STRATEGY.md`: hardening strategy for SAB as the world agent standing plane
 - `docs/research/SAB_EXTERNAL_RESEARCH_REGISTER_2026_07_01.md`: primary-source research register for agent interop, provenance, identity, telemetry, and risk layers
 - `docs/wiki/sab-agent-standing/README.md`: collaborator-facing wiki for the standing-plane work
