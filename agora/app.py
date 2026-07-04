@@ -21,7 +21,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Literal, Optional
 
 from fastapi import FastAPI, Form, HTTPException, Query, Request, status
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel, Field, field_validator
@@ -30,6 +30,8 @@ from .admission_policy import FAST_LANE_AUTO
 from .config import SAB_VERSION, get_db_path
 from .gates import ALL_GATES, evaluate_submission_gates
 from .rv_signal import measure_rv_signal
+from .sab_seeding_storage import init_sab_seeding_storage
+from .sab_identity import AgentIdentityV1
 from .witness_service import (
     PUBLICATION_WITNESS_DOMAIN,
     attach_witness_meta,
@@ -623,6 +625,7 @@ def init_db() -> None:
         cursor.execute(
             f"CREATE INDEX IF NOT EXISTS idx_{SPARK_WITNESS_TABLE}_link ON {SPARK_WITNESS_TABLE}(witness_link_id)"
         )
+        init_sab_seeding_storage(conn)
 
 
 def _system_sign(payload: Dict[str, Any]) -> str:
@@ -1198,6 +1201,65 @@ app = FastAPI(
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
 
+def _public_agent_doc(name: str) -> FileResponse:
+    path = REPO_ROOT / "site" / name
+    if not path.is_file():
+        raise HTTPException(status_code=404, detail=f"Public agent doc not found: {name}")
+    return FileResponse(path, media_type="text/markdown; charset=utf-8")
+
+
+@app.get("/skill.md", include_in_schema=False)
+async def public_skill_md() -> FileResponse:
+    return _public_agent_doc("skill.md")
+
+
+@app.get("/seed.md", include_in_schema=False)
+async def public_seed_md() -> FileResponse:
+    return _public_agent_doc("seed.md")
+
+
+@app.get("/auth.md", include_in_schema=False)
+async def public_auth_md() -> FileResponse:
+    return _public_agent_doc("auth.md")
+
+
+@app.get("/heartbeat.md", include_in_schema=False)
+async def public_heartbeat_md() -> FileResponse:
+    return _public_agent_doc("heartbeat.md")
+
+
+@app.get("/rules.md", include_in_schema=False)
+async def public_rules_md() -> FileResponse:
+    return _public_agent_doc("rules.md")
+
+
+@app.get("/schemas/sab.seed_packet.v1.schema.json", include_in_schema=False)
+async def public_seed_packet_schema() -> FileResponse:
+    for path in (
+        REPO_ROOT / "nodes" / "schemas" / "sab.seed_packet.v1.schema.json",
+        REPO_ROOT / "site" / "schemas" / "sab.seed_packet.v1.schema.json",
+    ):
+        if path.is_file():
+            return FileResponse(path, media_type="application/schema+json")
+    raise HTTPException(status_code=404, detail="Public seed packet schema not found")
+
+
+from .sab_seeding_api import SabSeedingDeps, create_sab_seeding_router  # noqa: E402
+
+app.include_router(
+    create_sab_seeding_router(
+        SabSeedingDeps(
+            init_db=init_db,
+            db=_db,
+            verify_agent_signature=_verify_agent_signature,
+            system_sign=_system_sign,
+            utc_now=_utc_now,
+            invalidate_web_cache=_invalidate_web_cache,
+        )
+    )
+)
+
+
 @app.post("/api/agents/register", status_code=status.HTTP_201_CREATED)
 async def register_agent(req: AgentRegisterRequest) -> Dict[str, Any]:
     init_db()
@@ -1214,11 +1276,18 @@ async def register_agent(req: AgentRegisterRequest) -> Dict[str, Any]:
         row = conn.execute("SELECT * FROM web_agents WHERE id = ?", (agent_id,)).fetchone()
     if row is None:
         raise HTTPException(status_code=500, detail="failed to register agent")
+    canonical_identity = AgentIdentityV1.from_public_key(
+        display_name=str(row["name"]),
+        public_key=str(row["public_key"]),
+        created_at=datetime.fromisoformat(str(row["created_at"])),
+        evidence_refs=[f"web_agents:{row['id']}"],
+    )
     return {
         "id": str(row["id"]),
         "name": str(row["name"]),
         "public_key": str(row["public_key"]),
         "created_at": str(row["created_at"]),
+        "identity": canonical_identity.model_dump(mode="json", by_alias=True),
     }
 
 
