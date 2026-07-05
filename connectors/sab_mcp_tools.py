@@ -1,8 +1,23 @@
 """Agent-readable SAB MCP tool manifest.
 
-This module defines the public MCP tool surface for SAB agent seeding v1. It is
-intentionally a manifest, not a network client: runtime handlers should bind
-these names to the canonical `/api/v1` routes once those endpoints are active.
+This module defines the intended public MCP tool surface for SAB agent seeding
+v1. It is a manifest only — a stub with respect to any runtime MCP surface:
+
+- No MCP server in this repository binds, registers, or serves these tools
+  (verified 2026-07-05: no server bootstrap in connectors/, no MCP entry point
+  in pyproject.toml or package.json, no MCP config referencing this module).
+- The `/api/v1` routes named below ARE live in-process (mounted via
+  `agora/app.py` -> `agora/sab_seeding_api.py`) with one exception:
+  `GET /api/v1/authority-leases/{lease_id}` (used by `sab.lease.validate`)
+  does not exist in the router as of 2026-07-05.
+- `returns` lists on mutation tools are the declared contract from
+  docs/lanes/sab-agent-seeding-v1/MCP_A2A_PROFILE.md; the live routes observed
+  on 2026-07-05 return `witness_head` but not a top-level `witness_event_id`
+  (see dogfood receipts under
+  docs/lanes/sab-agent-seeding-v1/reviews/2026-07-05-sab-review-recovery/dogfood/).
+
+Runtime handlers, once an MCP server exists, should bind these names to the
+canonical `/api/v1` routes.
 """
 
 from __future__ import annotations
@@ -71,7 +86,7 @@ MCP_TOOLS: list[dict[str, Any]] = [
             "properties": {"seed_id": {"type": "string", "minLength": 3}},
             "additionalProperties": False,
         },
-        "returns": ["seed_id", "state", "challenge_window", "standing_ids", "witness_head"],
+        "returns": ["seed_id", "state", "challenge_window_closes_at", "packet_hash", "witness_head"],
         "secret_handling": SECRET_HANDLING_WARNING,
     },
     {
@@ -79,7 +94,10 @@ MCP_TOOLS: list[dict[str, Any]] = [
         "kind": "read",
         "method": "GET",
         "endpoint": "/api/v1/seeds/{seed_id}",
-        "description": "Fetch canonical seed packet, evidence refs, and witness refs.",
+        "description": (
+            "Fetch the canonical seed packet (evidence_bundle is nested inside "
+            "seed_packet, not top-level) plus state and witness head."
+        ),
         "requires_signature": False,
         "input_schema": {
             "type": "object",
@@ -90,7 +108,7 @@ MCP_TOOLS: list[dict[str, Any]] = [
             },
             "additionalProperties": False,
         },
-        "returns": ["seed_packet", "evidence_bundle", "witness_event_ids", "public_url"],
+        "returns": ["seed_packet", "packet_hash", "state", "witness_head"],
         "secret_handling": SECRET_HANDLING_WARNING,
     },
     {
@@ -118,7 +136,7 @@ MCP_TOOLS: list[dict[str, Any]] = [
         "kind": "read",
         "method": "GET",
         "endpoint": "/api/v1/challenges/{challenge_id}",
-        "description": "Fetch challenge packet, severity, status, and resolution refs.",
+        "description": "Fetch challenge packet, status, and the claimant response (if any).",
         "requires_signature": False,
         "input_schema": {
             "type": "object",
@@ -126,7 +144,7 @@ MCP_TOOLS: list[dict[str, Any]] = [
             "properties": {"challenge_id": {"type": "string", "minLength": 3}},
             "additionalProperties": False,
         },
-        "returns": ["challenge_packet", "status", "resolution", "witness_event_ids"],
+        "returns": ["challenge_packet", "status", "response", "target_seed_id"],
         "secret_handling": SECRET_HANDLING_WARNING,
     },
     {
@@ -135,7 +153,10 @@ MCP_TOOLS: list[dict[str, Any]] = [
         "method": "GET",
         "endpoint": "/api/v1/witness-events/{event_id}",
         "alternate_endpoint": "/api/v1/seeds/{seed_id}/chain",
-        "description": "Fetch one witness event or a seed witness chain segment.",
+        "description": (
+            "Fetch one witness event (serialized event fields at top level) or a "
+            "seed witness chain segment (events/entries, head, verified)."
+        ),
         "requires_signature": False,
         "input_schema": {
             "type": "object",
@@ -147,7 +168,7 @@ MCP_TOOLS: list[dict[str, Any]] = [
             "anyOf": [{"required": ["event_id"]}, {"required": ["seed_id"]}],
             "additionalProperties": False,
         },
-        "returns": ["witness_event", "events", "head", "verified"],
+        "returns": ["event_id", "event_hash", "events", "head", "verified"],
         "secret_handling": SECRET_HANDLING_WARNING,
     },
     {
@@ -155,7 +176,7 @@ MCP_TOOLS: list[dict[str, Any]] = [
         "kind": "read",
         "method": "GET",
         "endpoint": "/api/v1/standing",
-        "description": "Search standing leases by subject, status, scope, or expiry.",
+        "description": "Search standing leases by subject seed, status, or exact scope string.",
         "requires_signature": False,
         "input_schema": {
             "type": "object",
@@ -167,7 +188,7 @@ MCP_TOOLS: list[dict[str, Any]] = [
             },
             "additionalProperties": False,
         },
-        "returns": ["standing_leases", "warnings"],
+        "returns": ["items"],
         "secret_handling": SECRET_HANDLING_WARNING,
     },
     {
@@ -185,14 +206,15 @@ MCP_TOOLS: list[dict[str, Any]] = [
         },
         "returns": [
             "standing_id",
+            "subject_seed_id",
+            "subject_claim_id",
             "scope",
+            "purpose",
             "status",
             "expiry",
             "revoker",
             "challenge_path",
-            "allowed_reliance",
-            "forbidden_reliance",
-            "witness_event_ids",
+            "standing_lease",
         ],
         "secret_handling": SECRET_HANDLING_WARNING,
     },
@@ -202,7 +224,10 @@ MCP_TOOLS: list[dict[str, Any]] = [
         "method": "GET",
         "endpoint": "/api/v1/authority-leases/{lease_id}",
         "description": (
-            "Validate authority lease scope, expiry, revoker, challenge path, and status."
+            "Validate authority lease scope, expiry, revoker, challenge path, and status. "
+            "PLANNED / stub target: this endpoint is NOT implemented in "
+            "agora/sab_seeding_api.py as of 2026-07-05 — authority leases are stored "
+            "(sab_authority_leases_v1) but expose no read route."
         ),
         "requires_signature": False,
         "input_schema": {

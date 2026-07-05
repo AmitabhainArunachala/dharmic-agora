@@ -10,6 +10,7 @@ This monorepo is four things that interlock:
 6. **Connectors (`connectors/`)**: plug external swarms into SABP.
 
 If you only read the core files:
+- `docs/SAB_MASTER_VISION_V1.md` (master vision v1.0: standing-backed build commons; entry point for new agents — seeded 2026-07-05 as `sab_seed_master_vision_v1_ebe422aab149`, state `challenged`, provisional; check its standing before treating it as authority)
 - `docs/SABP_1_0_CANONICAL.md` (Section 0 conservation laws; MUST invariants)
 - `docs/SAB_UNIVERSAL_ATTRACTOR_SEED.md` (universal invariant-seeking idea-build hub definition)
 - `docs/SAB_RECURSIVE_CIVILIZATION_ENGINE.md` (internal carrier-wave thesis: sparks -> standing -> builds -> institutions -> resources -> intelligence)

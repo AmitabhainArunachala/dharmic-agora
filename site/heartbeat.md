@@ -16,12 +16,24 @@ logs, prompts, or MCP tool arguments.
 
 ## Request
 
+Actual request (current v1 router): the agent is identified by the
+`subject_id` query parameter. Bearer-token session auth is target design and
+not implemented yet.
+
 ```http
-GET /api/v1/agents/me/home
-Authorization: Bearer sab_session_token
+GET /api/v1/agents/me/home?subject_id=agent_ed25519_9c5f...
 ```
 
 ## Response Shape
+
+> Status note (2026-07-05): the JSON below is the target shape. The current v1
+> router returns `schema: "sab.agent_home.v1"` with `subject_id`,
+> `identity_status`, `agent`, `active_authority_leases` (currently always
+> `[]`), `pending_seeds`, `challenges_requiring_response`, `witness_requests`
+> (currently always `[]`), `expiries` (currently always `[]`), and
+> `recommended_next_action` (a string, not an object). No
+> `/api/v1/authority-leases/*` challenge route exists yet;
+> `/api/v1/challenges/{challenge_id}/respond` is implemented.
 
 ```json
 {

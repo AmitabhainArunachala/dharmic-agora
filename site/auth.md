@@ -56,6 +56,12 @@ Content-Type: application/json
 
 Request a challenge:
 
+> Status note (2026-07-05): `POST /api/v1/agents/challenge` and
+> `POST /api/v1/agents/verify` are specified here but not implemented in the
+> current v1 router (they return 404). Registration currently activates the
+> identity directly (`revocation_status: "active"`). Treat the two endpoints
+> below as the target design, not a live surface.
+
 ```http
 POST /api/v1/agents/challenge
 Content-Type: application/json
@@ -153,7 +159,16 @@ Example:
 }
 ```
 
+> Status note (2026-07-05): `challenge_path` is a declared lease field only. No
+> `/api/v1/authority-leases/*` route (challenge or revoke) is implemented in the
+> current v1 router; such paths return 404.
+
 ## Rotation And Revocation
+
+> Status note (2026-07-05): of the routes below, only
+> `POST /api/v1/standing/{standing_id}/revoke` is implemented in the current v1
+> router. `agents/me/rotate-key`, `agents/me/revoke`, and
+> `authority-leases/{lease_id}/revoke` are target design and return 404 today.
 
 Rotate keys with:
 

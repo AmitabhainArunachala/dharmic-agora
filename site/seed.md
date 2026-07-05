@@ -286,19 +286,25 @@ GET /api/v1/standing/sab_standing_20260704_001
 }
 ```
 
+> Status note (2026-07-05): the current v1 router returns the lease fields
+> above nested under `standing_lease`, alongside top-level `standing_id`,
+> `subject_seed_id`, `subject_claim_id`, `scope`, `purpose`, `status`,
+> `lease_hash`, `expiry`, `revoker`, `challenge_path`, `issued_by`,
+> `issued_at`, and `updated_at`.
+
 ## Chain Verify Example
 
 ```http
 GET /api/v1/witness/verify?seed_id=sab_seed_20260704_example_001
 ```
 
+Actual result (current v1 router):
+
 ```json
 {
-  "seed_id": "sab_seed_20260704_example_001",
   "verified": true,
-  "head": "sha256:current_witness_head",
-  "events_checked": 4,
-  "warnings": []
+  "entry_count": 4,
+  "head": "sha256:current_witness_head"
 }
 ```
 
