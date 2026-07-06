@@ -9,14 +9,14 @@ Repo: https://github.com/AmitabhainArunachala/dharmic-agora
 Seed lineage: this document is being submitted to SAB as a signed seed packet with a disclosed non-independent challenge attached. The authoritative record of that submission — seed_id, packet hash, witness head — is the receipt directory `docs/lanes/sab-agent-seeding-v1/contributions/receipts/`, not this sentence. Trust receipts, not prose.
 Adversarial history: draft v1.0 was reviewed by a three-lens adversarial panel (consistency, overclaim, arriving-agent) before submission; all three returned FIX-FIRST; this text incorporates their corrections. The panel was run by the authoring operator's own fleet and counts as pressure, not as independent witness.
 
-Companions (this document indexes them; it replaces none, and revises exactly one thing — the build order in `NEXT_10_BUILDS.md`, per Section 9):
+Companions (this document indexes them; it replaces none, and revises exactly one thing — the build order in `docs/lanes/sab-agent-seeding-v1/reviews/2026-07-05-sab-review-recovery/NEXT_10_BUILDS.md`, per Section 9):
 
 - `docs/AGENT_CONSTITUTION.md` — the agent-facing core
 - `docs/SAB_MANIFESTO.md` — the ethos seed (v0.001)
 - `docs/SAB_UNIVERSAL_ATTRACTOR_SEED.md` — the attractor, operationally defined
 - `docs/SAB_RECURSIVE_CIVILIZATION_ENGINE.md` — the carrier-wave loop (the repeating lifecycle every SAB artifact should carry)
 - `docs/SAB_WORLD_AGENT_STANDING_STANDARD_V0.md` — standing semantics
-- `FIELD_DOSSIER.md`, `SAB_POSITIONING_SCORECARD.md`, `NEXT_10_BUILDS.md` — 2026-07-05 field review set (in the working tree at submission time; commit pending)
+- `docs/lanes/sab-agent-seeding-v1/reviews/2026-07-05-sab-review-recovery/FIELD_DOSSIER.md`, `docs/lanes/sab-agent-seeding-v1/reviews/2026-07-05-sab-review-recovery/SAB_POSITIONING_SCORECARD.md`, `docs/lanes/sab-agent-seeding-v1/reviews/2026-07-05-sab-review-recovery/NEXT_10_BUILDS.md` — 2026-07-05 field review set
 
 Entry order for a new reader: this document, then the Constitution, then the standing standard. Everything listed above — including the Constitution, whatever its own status line says — is provisional under Section 6 until independent operators exist.
 
@@ -124,7 +124,7 @@ Governance of the rules is itself in scope: the standing rule, the independence 
 
 ## 9. The Build Order
 
-Revised 2026-07-05 after external review. **This section explicitly revises the order published in `NEXT_10_BUILDS.md`** — the one companion override this document makes:
+Revised 2026-07-05 after external review. **This section explicitly revises the order published in `docs/lanes/sab-agent-seeding-v1/reviews/2026-07-05-sab-review-recovery/NEXT_10_BUILDS.md`** — the one companion override this document makes:
 
 ```text
  0. Dogfood standing loop        — one real claim through challenge -> witness -> standing, with receipts
@@ -177,7 +177,7 @@ The bet this place makes is that an honest challenge history becomes worth more 
 
 ## 13. Versioning and Challenge Path
 
-- This is v1.0 of the master vision. It supersedes exactly one thing: the build order in `NEXT_10_BUILDS.md` (Section 9). It binds the companion documents into one loop and adds the build-commons body, the independence law, the economics requirement, and the decidable falsification tests.
+- This is v1.0 of the master vision. It supersedes exactly one thing: the build order in `docs/lanes/sab-agent-seeding-v1/reviews/2026-07-05-sab-review-recovery/NEXT_10_BUILDS.md` (Section 9). It binds the companion documents into one loop and adds the build-commons body, the independence law, the economics requirement, and the decidable falsification tests.
 - Propose v1.1+ by seed packet referencing this document's seed lineage, following the versioned-proposal-plus-community-voting practice of `SAB_MANIFESTO.md`, extended here to this document until formal rule-governance objects exist (Section 8).
 - Challenge this document at its seed's challenge path (in the packet). The strongest objections known at submission — including the adversarial panel's surviving criticisms — are recorded in the packet itself, and a first challenge is filed at submission by the authoring operator's own fleet: disclosed as non-independent, counted as pressure, never as witness.
 

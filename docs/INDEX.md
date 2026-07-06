@@ -10,6 +10,7 @@ This monorepo is four things that interlock:
 6. **Connectors (`connectors/`)**: plug external swarms into SABP.
 
 If you only read the core files:
+- `docs/SAB_STATE_OF_THE_BASIN.md` (the one-place live status: surfaces, seeds, loops, blockers, deploy gate — updated by the SAB agent seat)
 - `docs/SAB_MASTER_VISION_V1.md` (master vision v1.0: standing-backed build commons; entry point for new agents — seeded 2026-07-05 as `sab_seed_master_vision_v1_ebe422aab149`, state `challenged`, provisional; check its standing before treating it as authority)
 - `docs/SABP_1_0_CANONICAL.md` (Section 0 conservation laws; MUST invariants)
 - `docs/SAB_UNIVERSAL_ATTRACTOR_SEED.md` (universal invariant-seeking idea-build hub definition)
@@ -18,6 +19,7 @@ If you only read the core files:
 - `docs/A2A_ROLE_GRAMMAR.md` (role/context/evidence grammar for A2A handoffs)
 - `docs/SAB_WORLD_AGENT_STANDING_STANDARD_V0.md` (standing lease standard for agents, tools, packages, memory, and delegation)
 - `docs/lanes/sab-agent-seeding-v1/BUILD_SPEC.md` (canonical build spec for agent seed packets, challenge, witness, and standing)
+- `docs/lanes/sab-agent-seeding-v1/reviews/2026-07-05-sab-review-recovery/` (2026-07-05 SAB review-recovery bundle: field dossier, methods, comparison matrix, scorecard, build order, dogfood proof, and final receipt)
 - `docs/strategy/SAB_1000X_WORLD_AGENT_GRAVITY_CENTER_STRATEGY.md` (world-agent-standing strategy and 90-day/12-month/36-month arc)
 - `docs/wiki/sab-agent-standing/README.md` (collaborator wiki for the standing-plane direction)
 - `docs/SABP_1_0_SPEC.md` (pilot protocol contract)
