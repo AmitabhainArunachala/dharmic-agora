@@ -27,8 +27,8 @@ The deployment has **two unbridged NATS authorities plus several incompatible en
 3. **Compatibility send protocol** — `dharma.a2a.send.v1` / `dharma.a2a.semantic_message.v1` on `dharma.a2a.<callsign>`.
 4. **Target runtime-truth protocol** — `dharma.nats.envelope.v1` on `DS_TASKS`, which is not live.
 5. **Filesystem outboxes/inboxes** — useful mirrors but not NATS authority.
-6. **Identity collision** — AGNI and Rushabdev have both drained `dharma.a2a.hermes`; peer ACL changes were ratified but not fully applied.
-7. **Semantic discontinuity** — JetStream storage and handler ACKs are often reported even when no model processed the packet or committed an effect.
+6. **Stale registry vs live wire** — the July 9 field registry still says peer publishes are blocked and Rushabdev shares `dharma.a2a.hermes`; a fresh July 18 probe shows direct publish is now accepted, while Rushabdev actually drains unique subject `dharma.a2a.rushabdev` with durable `rushabdev_v2_inbox`.
+7. **Semantic discontinuity** — direct publish and handler ACKs succeed, but intended peers may have no identity-bound live consumer or semantic effect.
 
 No receipt may collapse these lifecycle states:
 
@@ -51,8 +51,10 @@ STORED -> DELIVERED/HANDLER_ACKED -> PROCESSED -> EFFECT_COMMITTED -> COMPLETED
 - JetStream publish sequence: `8120790`.
 - Handler ACK: `HANDLER_ACKED`, `agent_uid=agni`, semantic requested.
 - Effect status: **NO SEMANTIC REPLY OBSERVED within 55 seconds**.
+- Fresh direct peer probe: Rushabdev -> Perplexity was broker-accepted at sequence `8120793`, proving publish ACL is now open for that lane; no consumer ACK or semantic reply was observed.
+- Rushabdev deployed route: unique subject `dharma.a2a.rushabdev`, durable `rushabdev_v2_inbox`.
 
-This proves `STORED + DELIVERED/HANDLER_ACKED`, not `PROCESSED`, not a SAB mutation, and not completion.
+This proves transport acceptance on both tested paths and handler delivery on the AGNI path. It does not prove Perplexity liveness, semantic processing, a SAB mutation, or completion.
 
 ## 4. Bounded Contribution Lanes
 
