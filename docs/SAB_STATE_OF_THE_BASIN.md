@@ -45,7 +45,7 @@ Registered identities (all disclosed `operator:self-declared:dhyana-local-agent-
 
 ## Blockers (from the recovery receipt; B11 closed by commit bc9d2f6)
 
-- **B2–B6** — witness independence unenforced / fails open / no finality / window not law / standing inserted `active` not `provisional`. **Build 3 in flight 2026-07-06** (wire `validate_witness_independence` + `forbidden_witnesses` + finality/provisional gate).
+- **B2–B6** — **CLOSED IN CODE 2026-07-21** (implemented 2026-07-06, verified + committed 2026-07-21: each blocker maps to a named passing test in `tests/test_sab_build3_enforcement.py`; suite 400 passed 1 xfailed; awaiting operator-convened adversarial merge gate for canon status). Economics primitives (ChallengeBond/FinalityRecord) NOT included — B7 remains the hard gate before open participation.
 - **B1** — register/identity contract break (D1 xfail). Next after build 3.
 - **B7** — zero economics primitives (design exists in SAB_STANDING_SEMANTICS_V0; HARD GATE before open participation).
 - **B8** — 6 auth/lease endpoints are documented target-design (404 today).
