@@ -445,13 +445,36 @@ def test_challenge_respond_sustain_reject_and_seed_correct(client: TestClient) -
             }
         )
     ).signature.hex()
-    corrected = client.post(
+    non_claimant_corrected = client.post(
         "/api/v1/seeds/sab_seed_respond/correct",
         json={
             "actor_identity": reviewer,
             "created_at": created_at,
             "correction": correction,
             "signature": correction_sig,
+        },
+    )
+    assert non_claimant_corrected.status_code == 403, non_claimant_corrected.text
+
+    created_at = _now()
+    author_correction_sig = author_sk.sign(
+        _canonical_bytes(
+            {
+                "kind": "sab_seed_correct",
+                "target_seed_id": "sab_seed_respond",
+                "actor_identity": author,
+                "correction_sha256": _hash_json(correction),
+                "created_at": created_at,
+            }
+        )
+    ).signature.hex()
+    corrected = client.post(
+        "/api/v1/seeds/sab_seed_respond/correct",
+        json={
+            "actor_identity": author,
+            "created_at": created_at,
+            "correction": correction,
+            "signature": author_correction_sig,
         },
     )
     assert corrected.status_code == 200, corrected.text
@@ -604,7 +627,8 @@ def test_witness_and_standing_surfaces_verify_chain(client: TestClient) -> None:
     )
     review = client.post("/api/v1/standing/review", json=lease)
     assert review.status_code == 201, review.text
-    assert review.json()["status"] == "active"
+    # Independence Law cap: no disclosed independent operators => provisional.
+    assert review.json()["status"] == "provisional"
     assert client.get("/api/v1/seeds/sab_seed_standing").json()["state"] == "standing_active"
 
     standing = client.get("/api/v1/standing/sab_standing_test")
@@ -615,7 +639,7 @@ def test_witness_and_standing_surfaces_verify_chain(client: TestClient) -> None:
     assert listed.json()["items"][0]["standing_id"] == "sab_standing_test"
 
     created_at = _now()
-    revalidate_sig = _sign_standing_action(
+    canon_sig = _sign_standing_action(
         reviewer_sk,
         action="revalidate",
         standing_id="sab_standing_test",
@@ -624,7 +648,7 @@ def test_witness_and_standing_surfaces_verify_chain(client: TestClient) -> None:
         evidence={"review": "ok"},
         created_at=created_at,
     )
-    revalidated = client.post(
+    canon_attempt = client.post(
         "/api/v1/standing/sab_standing_test/revalidate",
         json={
             "actor_identity": reviewer,
@@ -632,12 +656,35 @@ def test_witness_and_standing_surfaces_verify_chain(client: TestClient) -> None:
             "reason": "canon-ready after witnessed challenge",
             "evidence": {"review": "ok"},
             "promote_to_canon": True,
+            "signature": canon_sig,
+        },
+    )
+    # Canon is never reachable from a single signature: quorum gate required.
+    assert canon_attempt.status_code == 409, canon_attempt.text
+
+    created_at = _now()
+    revalidate_sig = _sign_standing_action(
+        reviewer_sk,
+        action="revalidate",
+        standing_id="sab_standing_test",
+        actor_identity=reviewer,
+        reason="revalidated within provisional cap",
+        evidence={"review": "ok"},
+        created_at=created_at,
+    )
+    revalidated = client.post(
+        "/api/v1/standing/sab_standing_test/revalidate",
+        json={
+            "actor_identity": reviewer,
+            "created_at": created_at,
+            "reason": "revalidated within provisional cap",
+            "evidence": {"review": "ok"},
             "signature": revalidate_sig,
         },
     )
     assert revalidated.status_code == 200, revalidated.text
-    assert revalidated.json()["standing"]["status"] == "canon"
-    assert revalidated.json()["seed_state"] == "canon"
+    assert revalidated.json()["standing"]["status"] == "provisional"
+    assert revalidated.json()["seed_state"] == "standing_active"
 
     created_at = _now()
     challenge_sig = _sign_standing_action(

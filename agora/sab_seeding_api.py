@@ -10,6 +10,19 @@ from hashlib import sha256
 from typing import Any, Callable, Dict, List, Optional
 
 from fastapi import APIRouter, Body, HTTPException, Query, status
+from pydantic import ValidationError
+
+from .sab_identity import (
+    AgentIdentityV1,
+    HIGH_IMPACT_LEVELS,
+    INDEPENDENCE_GRADE_TIERS,
+    MIN_INDEPENDENT_OPERATORS_FOR_STANDING,
+    OperatorBacking,
+    identity_operator_id,
+    independence_grade,
+    quorum_tier,
+    validate_witness_independence,
+)
 
 
 SEED_STATES = {
@@ -26,8 +39,48 @@ SEED_STATES = {
     "expired",
 }
 
-CHALLENGE_STATUSES = {"pending", "responded", "sustained", "rejected"}
-STANDING_STATUSES = {"active", "challenged", "revoked", "expired", "canon", "compost"}
+FINAL_SEED_STATES = {"canon", "compost", "revoked", "expired"}
+
+# Explicit transition matrix (SAB_STANDING_SEMANTICS_V0 §2.3(6)): final states
+# are absorbing; membership-only checks allowed resurrection from compost.
+SEED_TRANSITIONS: Dict[str, frozenset] = {
+    "pending_seed": frozenset(
+        {"pending_seed", "challenge_window_open", "challenged", "corrected", "witnessed", "compost", "expired"}
+    ),
+    "challenge_window_open": frozenset(
+        {"challenge_window_open", "challenged", "corrected", "witnessed", "standing_active", "compost", "expired"}
+    ),
+    "challenged": frozenset(
+        {
+            "challenged",
+            "corrected",
+            "witnessed",
+            "challenge_window_open",
+            "standing_active",
+            "revoked",
+            "compost",
+            "expired",
+        }
+    ),
+    "corrected": frozenset(
+        {"corrected", "challenged", "witnessed", "challenge_window_open", "standing_active", "compost", "expired"}
+    ),
+    "witnessed": frozenset({"witnessed", "challenged", "corrected", "standing_active", "compost", "expired"}),
+    "standing_active": frozenset(
+        {"standing_active", "challenged", "canon_candidate", "canon", "revoked", "expired", "compost"}
+    ),
+    "canon_candidate": frozenset(
+        {"canon_candidate", "standing_active", "challenged", "canon", "revoked", "expired", "compost"}
+    ),
+    "canon": frozenset(),
+    "compost": frozenset(),
+    "revoked": frozenset(),
+    "expired": frozenset(),
+}
+
+CHALLENGE_STATUSES = {"pending", "responded", "sustained", "rejected", "sustained_by_default", "lapsed"}
+OPEN_CHALLENGE_STATUSES = {"pending", "responded"}
+STANDING_STATUSES = {"provisional", "active", "challenged", "revoked", "expired", "canon", "compost", "superseded"}
 WITNESS_EVENT_TYPES = {
     "submit",
     "gate_scored",
@@ -42,6 +95,14 @@ WITNESS_EVENT_TYPES = {
     "canon",
     "compost",
 }
+
+# These drive terminal/standing transitions and may only be produced by their
+# dedicated endpoints or system paths, never by a bare witness-event post.
+RESERVED_WITNESS_EVENT_TYPES = {"standing_issued", "revoked", "expired", "canon", "compost"}
+WITNESSING_EVENT_TYPES = {"affirm", "refuse"}
+
+CHALLENGE_RESPOND_WINDOW = timedelta(days=7)
+CHALLENGE_PROSECUTE_WINDOW = timedelta(days=7)
 
 
 @dataclass(frozen=True)
@@ -68,6 +129,14 @@ def create_sab_seeding_router(deps: SabSeedingDeps) -> APIRouter:
         if not subject_id.startswith("agent_"):
             raise HTTPException(status_code=400, detail="subject_id must be an agent identity")
         identity_ref = str(payload.get("identity_ref") or f"sab_identity_{subject_id}").strip()
+        raw_backing = payload.get("operator_backing")
+        if raw_backing is not None and not isinstance(raw_backing, dict):
+            raise HTTPException(status_code=400, detail="operator_backing must be an object")
+        try:
+            operator_backing = OperatorBacking.model_validate(raw_backing or {})
+        except ValidationError as exc:
+            raise HTTPException(status_code=400, detail=f"invalid operator_backing: {exc}") from exc
+        controller = str(payload.get("controller") or "unknown")
         created_at = deps.utc_now()
         identity = {
             "schema": "sab.agent_identity.v1",
@@ -76,8 +145,8 @@ def create_sab_seeding_router(deps: SabSeedingDeps) -> APIRouter:
             "display_name": display_name,
             "identity_rail": str(payload.get("identity_rail") or "ed25519"),
             "public_key": public_key,
-            "controller": str(payload.get("controller") or "unknown"),
-            "operator_backing": payload.get("operator_backing") if isinstance(payload.get("operator_backing"), dict) else {},
+            "controller": controller,
+            "operator_backing": operator_backing.model_dump(),
             "external_attestations": payload.get("external_attestations")
             if isinstance(payload.get("external_attestations"), list)
             else [],
@@ -94,6 +163,35 @@ def create_sab_seeding_router(deps: SabSeedingDeps) -> APIRouter:
                 VALUES (?, ?, ?, COALESCE((SELECT created_at FROM web_agents WHERE id = ?), ?), 0, 0.0)
                 """,
                 (subject_id, display_name, public_key, subject_id, created_at),
+            )
+            conn.execute(
+                """
+                INSERT INTO sab_agent_identities_v1
+                    (subject_id, display_name, public_key, controller, operator_id,
+                     operator_backing_json, identity_json, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?,
+                        COALESCE((SELECT created_at FROM sab_agent_identities_v1 WHERE subject_id = ?), ?), ?)
+                ON CONFLICT(subject_id) DO UPDATE SET
+                    display_name = excluded.display_name,
+                    public_key = excluded.public_key,
+                    controller = excluded.controller,
+                    operator_id = excluded.operator_id,
+                    operator_backing_json = excluded.operator_backing_json,
+                    identity_json = excluded.identity_json,
+                    updated_at = excluded.updated_at
+                """,
+                (
+                    subject_id,
+                    display_name,
+                    public_key,
+                    controller,
+                    operator_backing.operator_id,
+                    _json_dumps(operator_backing.model_dump()),
+                    _json_dumps(identity),
+                    subject_id,
+                    created_at,
+                    created_at,
+                ),
             )
             deps.invalidate_web_cache()
         return identity
@@ -259,6 +357,8 @@ def create_sab_seeding_router(deps: SabSeedingDeps) -> APIRouter:
         deps.init_db()
         with deps.db() as conn:
             _init_v1_tables(conn)
+            _seed_row(conn, seed_id)
+            _sweep_challenge_deadlines(deps, conn, seed_id)
             row = _seed_row(conn, seed_id)
             return _serialize_seed(conn, row)
 
@@ -268,6 +368,7 @@ def create_sab_seeding_router(deps: SabSeedingDeps) -> APIRouter:
         with deps.db() as conn:
             _init_v1_tables(conn)
             _seed_row(conn, seed_id)
+            _sweep_challenge_deadlines(deps, conn, seed_id)
             return _seed_chain(conn, seed_id)
 
     @router.get("/seeds")
@@ -314,6 +415,9 @@ def create_sab_seeding_router(deps: SabSeedingDeps) -> APIRouter:
             row = _seed_row(conn, seed_id)
             _ensure_seed_lease_active(conn, row)
             actor_identity = _required_str(payload, "actor_identity")
+            actor_subject = _actor_subject(conn, actor_identity)
+            if str(row["claimant_identity"]) not in {actor_identity, actor_subject}:
+                raise HTTPException(status_code=403, detail="only the claimant may correct the seed")
             created_at = _required_str(payload, "created_at")
             correction_payload = payload.get("correction") or payload.get("corrected_seed_packet") or {}
             correction_hash = _hash_json(correction_payload if isinstance(correction_payload, dict) else {"value": correction_payload})
@@ -379,7 +483,12 @@ def create_sab_seeding_router(deps: SabSeedingDeps) -> APIRouter:
         deps.init_db()
         with deps.db() as conn:
             _init_v1_tables(conn)
+            _seed_row(conn, seed_id)
+            _sweep_challenge_deadlines(deps, conn, seed_id)
             seed = _seed_row(conn, seed_id)
+            if str(seed["state"]) in FINAL_SEED_STATES:
+                raise HTTPException(status_code=409, detail=f"seed is final in state {seed['state']}")
+            _ensure_challenge_window_open(seed)
             _ensure_seed_lease_active(conn, seed)
             challenge_packet = _extract_object(payload, "challenge_packet", "packet")
             packet_for_hash = _without_signature(challenge_packet)
@@ -416,15 +525,16 @@ def create_sab_seeding_router(deps: SabSeedingDeps) -> APIRouter:
                 raise HTTPException(status_code=409, detail="challenge already exists")
 
             now = deps.utc_now()
+            respond_by = _challenge_respond_by(packet_for_hash, created_at)
             conn.execute(
                 """
                 INSERT INTO sab_challenge_packets_v1
                     (
                         challenge_id, target_seed_id, target_claim_id, challenger_identity,
                         status, packet_json, packet_hash, response_json,
-                        created_at, updated_at
+                        respond_by, prosecute_by, created_at, updated_at
                     )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     challenge_id,
@@ -434,6 +544,8 @@ def create_sab_seeding_router(deps: SabSeedingDeps) -> APIRouter:
                     "pending",
                     _json_dumps(challenge_packet),
                     challenge_packet_hash,
+                    None,
+                    respond_by,
                     None,
                     created_at,
                     now,
@@ -492,6 +604,11 @@ def create_sab_seeding_router(deps: SabSeedingDeps) -> APIRouter:
             event_type = _required_str(payload, "event_type")
             if event_type not in WITNESS_EVENT_TYPES:
                 raise HTTPException(status_code=400, detail="unsupported witness event_type")
+            if event_type in RESERVED_WITNESS_EVENT_TYPES:
+                raise HTTPException(
+                    status_code=403,
+                    detail=f"event_type {event_type} is reserved for its dedicated endpoint or system transitions",
+                )
             actor_identity = _required_str(payload, "actor_identity")
             subject_type = _required_str(payload, "subject_type")
             subject_id = _required_str(payload, "subject_id")
@@ -499,10 +616,16 @@ def create_sab_seeding_router(deps: SabSeedingDeps) -> APIRouter:
             event_payload = payload.get("payload") if isinstance(payload.get("payload"), dict) else {}
             signature_hex = _required_str(payload, "signature")
             subject_seed_id = _subject_seed_id(conn, subject_type, subject_id)
+            if subject_seed_id:
+                _sweep_challenge_deadlines(deps, conn, subject_seed_id)
             expected_prev_hash = _latest_witness_hash(conn, subject_seed_id or f"{subject_type}:{subject_id}")
             supplied_prev_hash = str(payload.get("prev_hash") or expected_prev_hash)
             if supplied_prev_hash != expected_prev_hash:
                 raise HTTPException(status_code=409, detail="prev_hash is stale")
+            target_state = _state_for_witness_event(event_type) if subject_type == "seed" else None
+            seed = _seed_row(conn, subject_seed_id) if subject_seed_id else None
+            if seed is not None and target_state:
+                _ensure_seed_transition_allowed(str(seed["state"]), target_state)
             payload_hash = _hash_json(event_payload)
             message = _witness_event_message(
                 event_type=event_type,
@@ -514,6 +637,9 @@ def create_sab_seeding_router(deps: SabSeedingDeps) -> APIRouter:
             )
             deps.verify_agent_signature(conn, actor_identity, _canonical_bytes(message), signature_hex)
             _record_signature_use(conn, signature_hex, _hash_json(message), actor_identity)
+            independence: Optional[Dict[str, Any]] = None
+            if seed is not None and event_type in WITNESSING_EVENT_TYPES:
+                independence = _enforce_witness_policy(conn, seed=seed, actor_identity=actor_identity)
             event = _append_witness_event(
                 conn,
                 event_type=event_type,
@@ -526,20 +652,24 @@ def create_sab_seeding_router(deps: SabSeedingDeps) -> APIRouter:
                 timestamp=created_at,
                 expected_prev_hash=expected_prev_hash,
             )
-            if subject_type == "seed" and subject_seed_id:
-                state = _state_for_witness_event(event_type)
-                if state:
-                    _record_seed_transition(
-                        deps,
-                        conn,
-                        seed_id=subject_seed_id,
-                        actor_identity=actor_identity,
-                        event_type=event_type,
-                        to_state=state,
-                        payload={"witness_event_id": event["event_id"], "payload_hash": payload_hash},
-                        signature_hex=signature_hex,
-                        precreated_witness=event,
-                    )
+            if subject_type == "seed" and subject_seed_id and target_state:
+                transition_payload: Dict[str, Any] = {
+                    "witness_event_id": event["event_id"],
+                    "payload_hash": payload_hash,
+                }
+                if independence is not None:
+                    transition_payload["independence"] = independence
+                _record_seed_transition(
+                    deps,
+                    conn,
+                    seed_id=subject_seed_id,
+                    actor_identity=actor_identity,
+                    event_type=event_type,
+                    to_state=target_state,
+                    payload=transition_payload,
+                    signature_hex=signature_hex,
+                    precreated_witness=event,
+                )
             deps.invalidate_web_cache()
             return event
 
@@ -600,6 +730,8 @@ def create_sab_seeding_router(deps: SabSeedingDeps) -> APIRouter:
             standing_id = _required_str(lease_for_hash, "standing_id")
             subject_seed_id = _required_str(lease_for_hash, "subject_seed_id")
             subject_claim_id = _required_str(lease_for_hash, "subject_claim_id")
+            _seed_row(conn, subject_seed_id)
+            _sweep_challenge_deadlines(deps, conn, subject_seed_id)
             seed = _seed_row(conn, subject_seed_id)
             if str(seed["claim_id"]) != subject_claim_id:
                 raise HTTPException(status_code=400, detail="standing subject_claim_id does not match seed")
@@ -633,6 +765,8 @@ def create_sab_seeding_router(deps: SabSeedingDeps) -> APIRouter:
                 (standing_id,),
             ).fetchone():
                 raise HTTPException(status_code=409, detail="standing already exists")
+            issued_under = _independence_gate(conn, seed)
+            issued_status = "active" if issued_under["tier"] in {"active", "canon"} else "provisional"
             now = deps.utc_now()
             conn.execute(
                 """
@@ -640,9 +774,9 @@ def create_sab_seeding_router(deps: SabSeedingDeps) -> APIRouter:
                     (
                         standing_id, subject_seed_id, subject_claim_id, scope, purpose,
                         status, lease_json, lease_hash, expiry, revoker,
-                        challenge_path, issued_by, issued_at, updated_at
+                        challenge_path, issued_by, issued_at, updated_at, issued_under_json
                     )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     standing_id,
@@ -650,7 +784,7 @@ def create_sab_seeding_router(deps: SabSeedingDeps) -> APIRouter:
                     subject_claim_id,
                     str(lease_for_hash.get("scope") or ""),
                     str(lease_for_hash.get("purpose") or ""),
-                    "active",
+                    issued_status,
                     _json_dumps(standing_lease),
                     standing_lease_hash,
                     _standing_expiry(lease_for_hash),
@@ -659,6 +793,7 @@ def create_sab_seeding_router(deps: SabSeedingDeps) -> APIRouter:
                     reviewer_identity,
                     created_at,
                     now,
+                    _json_dumps(issued_under),
                 ),
             )
             event = _record_standing_event(
@@ -667,8 +802,8 @@ def create_sab_seeding_router(deps: SabSeedingDeps) -> APIRouter:
                 standing_id=standing_id,
                 actor_identity=reviewer_identity,
                 event_type="standing_issued",
-                to_status="active",
-                payload={"standing_lease_hash": standing_lease_hash},
+                to_status=issued_status,
+                payload={"standing_lease_hash": standing_lease_hash, "issued_under": issued_under},
                 signature_hex=signature_hex,
             )
             _record_seed_transition(
@@ -764,6 +899,22 @@ def _init_v1_tables(conn: sqlite3.Connection) -> None:
     )
     conn.execute(
         """
+        CREATE TABLE IF NOT EXISTS sab_agent_identities_v1 (
+            subject_id TEXT PRIMARY KEY,
+            display_name TEXT NOT NULL,
+            public_key TEXT NOT NULL,
+            controller TEXT NOT NULL,
+            operator_id TEXT NOT NULL,
+            operator_backing_json TEXT NOT NULL,
+            identity_json TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+        )
+        """
+    )
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_sab_agent_identities_operator ON sab_agent_identities_v1(operator_id)")
+    conn.execute(
+        """
         CREATE TABLE IF NOT EXISTS sab_authority_leases_v1 (
             lease_id TEXT PRIMARY KEY,
             subject_id TEXT NOT NULL,
@@ -831,6 +982,8 @@ def _init_v1_tables(conn: sqlite3.Connection) -> None:
             packet_json TEXT NOT NULL,
             packet_hash TEXT NOT NULL,
             response_json TEXT,
+            respond_by TEXT,
+            prosecute_by TEXT,
             created_at TEXT NOT NULL,
             updated_at TEXT NOT NULL
         )
@@ -838,6 +991,8 @@ def _init_v1_tables(conn: sqlite3.Connection) -> None:
     )
     conn.execute("CREATE INDEX IF NOT EXISTS idx_sab_challenge_seed ON sab_challenge_packets_v1(target_seed_id, id DESC)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_sab_challenge_status ON sab_challenge_packets_v1(status, id DESC)")
+    _ensure_v1_column(conn, "sab_challenge_packets_v1", "respond_by", "respond_by TEXT")
+    _ensure_v1_column(conn, "sab_challenge_packets_v1", "prosecute_by", "prosecute_by TEXT")
     conn.execute(
         """
         CREATE TABLE IF NOT EXISTS sab_witness_events_v1 (
@@ -878,12 +1033,14 @@ def _init_v1_tables(conn: sqlite3.Connection) -> None:
             challenge_path TEXT NOT NULL,
             issued_by TEXT NOT NULL,
             issued_at TEXT NOT NULL,
-            updated_at TEXT NOT NULL
+            updated_at TEXT NOT NULL,
+            issued_under_json TEXT
         )
         """
     )
     conn.execute("CREATE INDEX IF NOT EXISTS idx_sab_standing_seed ON sab_standing_leases_v1(subject_seed_id, id DESC)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_sab_standing_status ON sab_standing_leases_v1(status, id DESC)")
+    _ensure_v1_column(conn, "sab_standing_leases_v1", "issued_under_json", "issued_under_json TEXT")
     conn.execute(
         """
         CREATE TABLE IF NOT EXISTS sab_standing_events_v1 (
@@ -978,6 +1135,328 @@ def _identity_ref_subject(conn: sqlite3.Connection, identity_ref: str) -> Option
     if by_name is not None:
         return str(by_name["id"])
     return None
+
+
+def _ensure_v1_column(conn: sqlite3.Connection, table: str, column: str, column_def: str) -> None:
+    columns = {str(row[1]) for row in conn.execute(f"PRAGMA table_info({table})").fetchall()}
+    if column not in columns:
+        conn.execute(f"ALTER TABLE {table} ADD COLUMN {column_def}")
+
+
+def _actor_subject(conn: sqlite3.Connection, actor_identity: str) -> str:
+    if actor_identity.startswith("sab_identity_"):
+        resolved = _identity_ref_subject(conn, actor_identity)
+        if resolved:
+            return resolved
+    return actor_identity
+
+
+def _identity_model(conn: sqlite3.Connection, actor_identity: str) -> Optional[AgentIdentityV1]:
+    subject = _actor_subject(conn, actor_identity)
+    agent = conn.execute(
+        "SELECT id, name, public_key FROM web_agents WHERE id = ?",
+        (subject,),
+    ).fetchone()
+    if agent is None:
+        return None
+    controller = "unknown"
+    backing: Dict[str, Any] = {}
+    identity_row = conn.execute(
+        "SELECT controller, operator_backing_json FROM sab_agent_identities_v1 WHERE subject_id = ?",
+        (subject,),
+    ).fetchone()
+    if identity_row is not None:
+        stored_controller = str(identity_row["controller"] or "unknown")
+        if stored_controller in {"self", "operator", "org", "unknown"}:
+            controller = stored_controller
+        try:
+            parsed = json.loads(str(identity_row["operator_backing_json"]))
+            if isinstance(parsed, dict):
+                backing = parsed
+        except (TypeError, ValueError):
+            backing = {}
+    try:
+        return AgentIdentityV1.from_public_key(
+            display_name=str(agent["name"] or "sab-agent"),
+            public_key=str(agent["public_key"]),
+            controller=controller,
+            operator_backing=OperatorBacking.model_validate(backing),
+        )
+    except (ValidationError, ValueError):
+        # Grader failure mode: ungradable identities collapse to undisclosed.
+        return None
+
+
+def _system_operator_count(conn: sqlite3.Connection) -> int:
+    rows = conn.execute("SELECT DISTINCT operator_id FROM sab_agent_identities_v1").fetchall()
+    operators = {str(row["operator_id"]).strip().lower() for row in rows}
+    return len({operator for operator in operators if operator and operator != "unknown"})
+
+
+def _seed_witness_grades(conn: sqlite3.Connection, seed: sqlite3.Row) -> List[Dict[str, Any]]:
+    claimant_model = _identity_model(conn, str(seed["claimant_identity"]))
+    grades: List[Dict[str, Any]] = []
+    rows = conn.execute(
+        """
+        SELECT DISTINCT actor_identity
+        FROM sab_witness_events_v1
+        WHERE subject_seed_id = ? AND event_type = 'affirm'
+        """,
+        (str(seed["seed_id"]),),
+    ).fetchall()
+    for row in rows:
+        actor = str(row["actor_identity"])
+        witness_model = _identity_model(conn, actor)
+        if claimant_model is None or witness_model is None:
+            grades.append({"witness_identity": actor, "grade": "undisclosed", "operator_id": "unknown"})
+            continue
+        grades.append(
+            {
+                "witness_identity": actor,
+                "grade": independence_grade(witness_model, claimant_model),
+                "operator_id": identity_operator_id(witness_model),
+            }
+        )
+    return grades
+
+
+def _independence_gate(conn: sqlite3.Connection, seed: sqlite3.Row) -> Dict[str, Any]:
+    witnesses = _seed_witness_grades(conn, seed)
+    system_operator_count = _system_operator_count(conn)
+    tier = quorum_tier(
+        witnesses=[(str(item["grade"]), str(item["operator_id"])) for item in witnesses],
+        system_operator_count=system_operator_count,
+    )
+    distinct_operators = {
+        str(item["operator_id"])
+        for item in witnesses
+        if str(item["operator_id"]).strip().lower() not in {"", "unknown"}
+    }
+    return {
+        "tier": tier,
+        "witnesses": witnesses,
+        "distinct_operator_count": len(distinct_operators),
+        "system_operator_count": system_operator_count,
+        "operator_count_basis": "self_declared",
+        "rehearsal_flag": "single_operator_rehearsal"
+        if system_operator_count < MIN_INDEPENDENT_OPERATORS_FOR_STANDING
+        else "multi_operator",
+    }
+
+
+def _enforce_witness_policy(
+    conn: sqlite3.Connection,
+    *,
+    seed: sqlite3.Row,
+    actor_identity: str,
+) -> Dict[str, Any]:
+    packet = json.loads(str(seed["packet_json"]))
+    plan = packet.get("witness_plan") if isinstance(packet.get("witness_plan"), dict) else {}
+    forbidden = {str(item).strip() for item in (plan.get("forbidden_witnesses") or []) if str(item).strip()}
+    actor_subject = _actor_subject(conn, actor_identity)
+    if forbidden & {actor_identity, actor_subject}:
+        raise HTTPException(status_code=403, detail="witness is forbidden by the seed witness_plan")
+    impact = str(plan.get("impact") or "low")
+    claimant_model = _identity_model(conn, str(seed["claimant_identity"]))
+    witness_model = _identity_model(conn, actor_subject)
+    if claimant_model is None or witness_model is None:
+        if impact.lower() in HIGH_IMPACT_LEVELS:
+            raise HTTPException(status_code=403, detail="witness independence cannot be established; failing closed")
+        return {"grade": "undisclosed", "impact": impact, "warnings": ["independence_ungradable"]}
+    existing_models: List[AgentIdentityV1] = []
+    seen: set = set()
+    for row in conn.execute(
+        """
+        SELECT DISTINCT actor_identity
+        FROM sab_witness_events_v1
+        WHERE subject_seed_id = ? AND event_type = 'affirm'
+        """,
+        (str(seed["seed_id"]),),
+    ).fetchall():
+        prior = _identity_model(conn, str(row["actor_identity"]))
+        if prior is not None and prior.subject_id not in seen:
+            seen.add(prior.subject_id)
+            existing_models.append(prior)
+    decision = validate_witness_independence(
+        claimant_identity=claimant_model,
+        witness_identity=witness_model,
+        impact=impact,
+        existing_witness_identities=existing_models,
+    )
+    if not decision.ok:
+        raise HTTPException(status_code=403, detail="witness independence rejected: " + "; ".join(decision.errors))
+    return {
+        "grade": independence_grade(witness_model, claimant_model),
+        "impact": impact,
+        "warnings": decision.warnings,
+    }
+
+
+def _adjudicator_independence(
+    conn: sqlite3.Connection,
+    *,
+    adjudicator: str,
+    claimant: str,
+    challenger: str,
+) -> Dict[str, Any]:
+    system_operator_count = _system_operator_count(conn)
+    if system_operator_count < MIN_INDEPENDENT_OPERATORS_FOR_STANDING:
+        return {"independence": "single_operator_rehearsal", "system_operator_count": system_operator_count}
+    adjudicator_model = _identity_model(conn, adjudicator)
+    grades: Dict[str, str] = {}
+    minimum = INDEPENDENCE_GRADE_TIERS["cross_operator_unverified"]
+    for role, party in (("claimant", claimant), ("challenger", challenger)):
+        party_model = _identity_model(conn, party)
+        grade = "undisclosed"
+        if adjudicator_model is not None and party_model is not None:
+            grade = independence_grade(adjudicator_model, party_model)
+        if INDEPENDENCE_GRADE_TIERS.get(grade, 1) < minimum:
+            raise HTTPException(status_code=403, detail=f"adjudicator is not independent of the {role}")
+        grades[f"vs_{role}"] = grade
+    return {"independence": grades, "system_operator_count": system_operator_count}
+
+
+def _seed_transition_allowed(from_state: str, to_state: str) -> bool:
+    return to_state in SEED_TRANSITIONS.get(from_state, frozenset())
+
+
+def _ensure_seed_transition_allowed(from_state: str, to_state: str) -> None:
+    if _seed_transition_allowed(from_state, to_state):
+        return
+    if from_state in FINAL_SEED_STATES:
+        raise HTTPException(status_code=409, detail=f"seed is final in state {from_state}")
+    raise HTTPException(status_code=409, detail=f"seed transition {from_state} -> {to_state} is not allowed")
+
+
+def _ensure_challenge_window_open(seed: sqlite3.Row) -> None:
+    closes_at = seed["challenge_window_closes_at"]
+    if not closes_at:
+        return
+    if _parse_datetime(str(closes_at)) <= datetime.now(timezone.utc):
+        raise HTTPException(
+            status_code=409,
+            detail="challenge window is closed; late challenges require a challenge bond (not yet implemented)",
+        )
+
+
+def _challenge_respond_by(packet: Dict[str, Any], created_at: str) -> str:
+    deadline = str(packet.get("deadline") or "").strip()
+    if deadline:
+        try:
+            return _parse_datetime(deadline).isoformat()
+        except HTTPException:
+            pass
+    return (_parse_datetime(created_at) + CHALLENGE_RESPOND_WINDOW).isoformat()
+
+
+def _challenge_prosecute_by(packet: Dict[str, Any]) -> str:
+    declared = str(packet.get("prosecute_by") or "").strip()
+    if declared:
+        try:
+            return _parse_datetime(declared).isoformat()
+        except HTTPException:
+            pass
+    return (datetime.now(timezone.utc) + CHALLENGE_PROSECUTE_WINDOW).isoformat()
+
+
+def _sweep_challenge_deadlines(deps: SabSeedingDeps, conn: sqlite3.Connection, seed_id: str) -> None:
+    now = datetime.now(timezone.utc)
+    rows = conn.execute(
+        """
+        SELECT challenge_id, status, respond_by, prosecute_by
+        FROM sab_challenge_packets_v1
+        WHERE target_seed_id = ? AND status IN ('pending', 'responded')
+        """,
+        (seed_id,),
+    ).fetchall()
+    for challenge in rows:
+        challenge_id = str(challenge["challenge_id"])
+        status_value = str(challenge["status"])
+        if status_value == "pending":
+            deadline_raw = challenge["respond_by"]
+            if not deadline_raw:
+                continue
+            try:
+                deadline = _parse_datetime(str(deadline_raw))
+            except HTTPException:
+                continue
+            if deadline > now:
+                continue
+            conn.execute(
+                """
+                UPDATE sab_challenge_packets_v1
+                SET status = 'sustained_by_default', updated_at = ?
+                WHERE challenge_id = ?
+                """,
+                (deps.utc_now(), challenge_id),
+            )
+            seed = _seed_row(conn, seed_id)
+            if _seed_transition_allowed(str(seed["state"]), "compost"):
+                signature = deps.system_sign(
+                    {
+                        "kind": "sab_challenge_sustained_by_default",
+                        "challenge_id": challenge_id,
+                        "respond_by": str(deadline_raw),
+                    }
+                )
+                _record_seed_transition(
+                    deps,
+                    conn,
+                    seed_id=seed_id,
+                    actor_identity="system",
+                    event_type="compost",
+                    to_state="compost",
+                    payload={
+                        "challenge_id": challenge_id,
+                        "adjudication": "sustained_by_default",
+                        "reason": "claimant did not respond before respond_by",
+                        "respond_by": str(deadline_raw),
+                    },
+                    signature_hex=signature,
+                )
+        else:
+            deadline_raw = challenge["prosecute_by"]
+            if not deadline_raw:
+                continue
+            try:
+                deadline = _parse_datetime(str(deadline_raw))
+            except HTTPException:
+                continue
+            if deadline > now:
+                continue
+            conn.execute(
+                """
+                UPDATE sab_challenge_packets_v1
+                SET status = 'lapsed', updated_at = ?
+                WHERE challenge_id = ?
+                """,
+                (deps.utc_now(), challenge_id),
+            )
+            seed = _seed_row(conn, seed_id)
+            current_state = str(seed["state"])
+            if _seed_transition_allowed(current_state, current_state):
+                signature = deps.system_sign(
+                    {
+                        "kind": "sab_challenge_lapsed",
+                        "challenge_id": challenge_id,
+                        "prosecute_by": str(deadline_raw),
+                    }
+                )
+                _record_seed_transition(
+                    deps,
+                    conn,
+                    seed_id=seed_id,
+                    actor_identity="system",
+                    event_type="challenge",
+                    to_state=current_state,
+                    payload={
+                        "challenge_id": challenge_id,
+                        "challenge_status": "lapsed",
+                        "reason": "challenger did not prosecute before prosecute_by",
+                        "prosecute_by": str(deadline_raw),
+                    },
+                    signature_hex=signature,
+                )
 
 
 def _verify_signature_with_fallback(
@@ -1404,6 +1883,7 @@ def _record_seed_transition(
         raise HTTPException(status_code=400, detail="unsupported seed state")
     row = _seed_row(conn, seed_id)
     from_state = str(row["state"])
+    _ensure_seed_transition_allowed(from_state, to_state)
     transition_payload = {
         **payload,
         "from_state": from_state,
@@ -1608,6 +2088,8 @@ def _serialize_standing(row: sqlite3.Row, *, include_lease: bool = True) -> Dict
         "issued_at": str(row["issued_at"]),
         "updated_at": str(row["updated_at"]),
     }
+    if "issued_under_json" in row.keys() and row["issued_under_json"]:
+        item["issued_under"] = json.loads(str(row["issued_under_json"]))
     if include_lease:
         item["standing_lease"] = json.loads(str(row["lease_json"]))
     return item
@@ -1743,8 +2225,13 @@ def _resolve_challenge_action(
         _init_v1_tables(conn)
         challenge = _challenge_row(conn, challenge_id)
         seed_id = str(challenge["target_seed_id"])
+        _sweep_challenge_deadlines(deps, conn, seed_id)
+        challenge = _challenge_row(conn, challenge_id)
         seed = _seed_row(conn, seed_id)
         _ensure_seed_lease_active(conn, seed)
+        current_status = str(challenge["status"])
+        if current_status not in OPEN_CHALLENGE_STATUSES:
+            raise HTTPException(status_code=409, detail=f"challenge is already {current_status}")
         actor_identity = str(
             payload.get("actor_identity")
             or payload.get("responder_identity")
@@ -1753,6 +2240,24 @@ def _resolve_challenge_action(
         ).strip()
         if not actor_identity:
             raise HTTPException(status_code=400, detail="actor_identity is required")
+        actor_subject = _actor_subject(conn, actor_identity)
+        claimant = str(seed["claimant_identity"])
+        challenger = str(challenge["challenger_identity"])
+        challenger_subject = _actor_subject(conn, challenger)
+        actor_ids = {actor_identity, actor_subject}
+        adjudication_meta: Optional[Dict[str, Any]] = None
+        if action == "respond":
+            if claimant not in actor_ids:
+                raise HTTPException(status_code=403, detail="only the claimant may respond to the challenge")
+        else:
+            if actor_ids & {claimant, challenger, challenger_subject}:
+                raise HTTPException(status_code=403, detail="adjudicator must be neither claimant nor challenger")
+            adjudication_meta = _adjudicator_independence(
+                conn,
+                adjudicator=actor_subject,
+                claimant=claimant,
+                challenger=challenger_subject,
+            )
         created_at = str(payload.get("created_at") or datetime.now(timezone.utc).isoformat()).strip()
         body = payload.get("response") if action == "respond" else payload.get("reason")
         if body is None and action == "respond":
@@ -1777,14 +2282,23 @@ def _resolve_challenge_action(
             deps.verify_agent_signature(conn, signature_signer, _canonical_bytes(legacy_message), signature_hex)
             message = legacy_message
         _record_signature_use(conn, signature_hex, _hash_json(message), signature_signer)
+        prosecute_by = _challenge_prosecute_by(json.loads(str(challenge["packet_json"]))) if action == "respond" else challenge["prosecute_by"]
         conn.execute(
             """
             UPDATE sab_challenge_packets_v1
-            SET status = ?, response_json = ?, updated_at = ?
+            SET status = ?, response_json = ?, prosecute_by = ?, updated_at = ?
             WHERE challenge_id = ?
             """,
-            (challenge_status, _json_dumps(body_payload), deps.utc_now(), challenge_id),
+            (challenge_status, _json_dumps(body_payload), prosecute_by, deps.utc_now(), challenge_id),
         )
+        transition_payload = {
+            "challenge_id": challenge_id,
+            "action": action,
+            "payload_hash": body_hash,
+            "payload": body_payload,
+        }
+        if adjudication_meta is not None:
+            transition_payload["adjudication"] = adjudication_meta
         witness = _record_seed_transition(
             deps,
             conn,
@@ -1792,7 +2306,7 @@ def _resolve_challenge_action(
             actor_identity=actor_identity,
             event_type="response" if action == "respond" else ("compost" if action == "sustain" else "challenge"),
             to_state=seed_state,
-            payload={"challenge_id": challenge_id, "action": action, "payload_hash": body_hash, "payload": body_payload},
+            payload=transition_payload,
             signature_hex=signature_hex,
         )
         deps.invalidate_web_cache()
@@ -1813,6 +2327,8 @@ def _review_standing_request(
     payload: Dict[str, Any],
 ) -> Dict[str, Any]:
     subject_seed_id = _required_str(payload, "subject_seed_id")
+    _seed_row(conn, subject_seed_id)
+    _sweep_challenge_deadlines(deps, conn, subject_seed_id)
     seed = _seed_row(conn, subject_seed_id)
     if _pending_challenge_count(conn, subject_seed_id) > 0:
         raise HTTPException(status_code=409, detail="standing review requires resolved challenge path")
@@ -1916,7 +2432,7 @@ def _expire_standing_if_needed(
     row: sqlite3.Row,
 ) -> sqlite3.Row:
     status_value = str(row["status"])
-    if status_value in {"revoked", "expired", "compost"}:
+    if status_value in {"revoked", "expired", "compost", "canon"}:
         return row
     if _parse_datetime(str(row["expiry"])) > datetime.now(timezone.utc):
         return row
@@ -1937,17 +2453,19 @@ def _expire_standing_if_needed(
         payload={"expiry": str(row["expiry"])},
         signature_hex=signature,
     )
-    _record_seed_transition(
-        deps,
-        conn,
-        seed_id=str(row["subject_seed_id"]),
-        actor_identity="system",
-        event_type="expired",
-        to_state="expired",
-        payload={"standing_id": str(row["standing_id"])},
-        signature_hex=signature,
-        precreated_witness=event,
-    )
+    seed_row = _seed_row(conn, str(row["subject_seed_id"]))
+    if _seed_transition_allowed(str(seed_row["state"]), "expired"):
+        _record_seed_transition(
+            deps,
+            conn,
+            seed_id=str(row["subject_seed_id"]),
+            actor_identity="system",
+            event_type="expired",
+            to_state="expired",
+            payload={"standing_id": str(row["standing_id"])},
+            signature_hex=signature,
+            precreated_witness=event,
+        )
     return _standing_row(conn, str(row["standing_id"]))
 
 
@@ -1989,6 +2507,22 @@ def _standing_action(
         }
         deps.verify_agent_signature(conn, actor_identity, _canonical_bytes(message), signature_hex)
         _record_signature_use(conn, signature_hex, _hash_json(message), actor_identity)
+        event_payload: Dict[str, Any] = dict(action_payload)
+        if action == "revalidate":
+            seed = _seed_row(conn, str(standing["subject_seed_id"]))
+            issued_under = _independence_gate(conn, seed)
+            if to_status == "canon" and issued_under["tier"] != "canon":
+                raise HTTPException(
+                    status_code=409,
+                    detail=(
+                        "canon requires a witness quorum of >=3 cross_operator_attested witnesses "
+                        "from >=3 independent operators"
+                    ),
+                )
+            if to_status == "active" and issued_under["tier"] not in {"active", "canon"}:
+                to_status = "provisional"
+                seed_state = "standing_active"
+            event_payload["issued_under"] = issued_under
         event_type = {
             "challenge": "challenge",
             "revoke": "revoked",
@@ -2001,7 +2535,7 @@ def _standing_action(
             actor_identity=actor_identity,
             event_type=event_type,
             to_status=to_status,
-            payload=action_payload,
+            payload=event_payload,
             signature_hex=signature_hex,
         )
         _record_seed_transition(

@@ -36,6 +36,9 @@ from agora.sab_identity import (  # noqa: E402
     ReplayProtector,
     SignatureEnvelope,
     canonical_payload_for_signature,
+    independence_grade,
+    quorum_tier,
+    same_operator,
     subject_id_from_public_key,
     validate_authority_lease,
     validate_witness_independence,
@@ -374,3 +377,37 @@ def test_high_impact_witness_policy_rejects_self_witness_same_operator_and_conce
     )
     assert low_impact.ok
     assert "same_operator_low_impact" in low_impact.warnings
+
+
+def test_unknown_operator_fails_closed_as_not_independent() -> None:
+    _, claimant = _identity("fail-closed-claimant", operator_id="operator-a")
+    _, undisclosed_witness = _identity("fail-closed-witness", operator_id="unknown")
+    _, disclosed_witness = _identity("fail-closed-independent", operator_id="operator-b")
+
+    assert same_operator(claimant, undisclosed_witness) is True
+    assert same_operator(claimant, disclosed_witness) is False
+    assert independence_grade(undisclosed_witness, claimant) == "undisclosed"
+    assert independence_grade(disclosed_witness, claimant) == "cross_operator_unverified"
+
+    decision = validate_witness_independence(
+        claimant_identity=claimant,
+        witness_identity=undisclosed_witness,
+        impact="high",
+    )
+    assert not decision.ok
+    assert "same_operator_witness_forbidden_for_high_impact" in decision.errors
+
+
+def test_quorum_tier_caps_at_provisional_below_three_operators() -> None:
+    cross = [("cross_operator_unverified", "operator-a"), ("cross_operator_unverified", "operator-b")]
+    assert quorum_tier(witnesses=cross, system_operator_count=1) == "provisional"
+    assert quorum_tier(witnesses=cross, system_operator_count=2) == "provisional"
+    assert quorum_tier(witnesses=cross, system_operator_count=3) == "active"
+    assert quorum_tier(witnesses=[("self", "operator-a")], system_operator_count=3) == "provisional"
+    assert quorum_tier(witnesses=[("undisclosed", "unknown")] * 3, system_operator_count=3) == "provisional"
+    attested = [
+        ("cross_operator_attested", "operator-a"),
+        ("cross_operator_attested", "operator-b"),
+        ("cross_operator_attested", "operator-c"),
+    ]
+    assert quorum_tier(witnesses=attested, system_operator_count=3) == "canon"

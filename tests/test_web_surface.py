@@ -24,7 +24,11 @@ def web_app(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
         if mod_name == "agora" or mod_name.startswith("agora."):
             del sys.modules[mod_name]
 
-    return importlib.import_module("agora.app")
+    mod = importlib.import_module("agora.app")
+    packet_dir = tmp_path / "frontier_packets"
+    packet_dir.mkdir()
+    monkeypatch.setattr(mod, "FRONTIER_PACKET_DIR", packet_dir)
+    return mod
 
 
 @pytest.fixture

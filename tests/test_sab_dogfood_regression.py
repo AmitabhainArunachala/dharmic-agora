@@ -5,13 +5,13 @@ docs/lanes/sab-agent-seeding-v1/reviews/2026-07-05-sab-review-recovery/dogfood/
 against a temporary database: register x3 -> seed -> challenge -> respond
 (scope narrowing) -> witness affirm -> chain verify -> standing lease review.
 
-Also documents, as strict-marked xfails, two defects found during the run:
+Also documents, as an xfail, one remaining defect found during the run:
 - D1: /api/v1/agents/register output is rejected by the canonical
   AgentIdentityV1 model (extra `identity_ref` field + subject_id derived with
   sha256[:16] in agora/sab_seeding_api.py vs [:32] in agora/sab_identity.py).
-- D2: POST /api/v1/witness-events never consults the seed's
-  witness_plan.forbidden_witnesses, so a claimant may affirm-witness its own
-  seed through the live API even when the seed forbids it.
+
+D2 (witness_plan.forbidden_witnesses unenforced) was closed by build 3;
+its former xfail now runs as a real regression test below.
 """
 from __future__ import annotations
 
@@ -286,7 +286,9 @@ def test_dogfood_loop_seed_challenge_respond_witness_standing(client: TestClient
         json={"standing_lease": lease, "reviewer_identity": witness.subject_id, "created_at": issued_at},
     )
     assert standing.status_code == 201, standing.text
-    assert standing.json()["status"] == "active"
+    # Independence Law cap (SAB_MASTER_VISION_V1 §6): one operator => provisional.
+    assert standing.json()["status"] == "provisional"
+    assert standing.json()["issued_under"]["rehearsal_flag"] == "single_operator_rehearsal"
 
     final_seed = client.get(f"/api/v1/seeds/{seed_id}").json()
     assert final_seed["state"] == "standing_active"
@@ -308,14 +310,6 @@ def test_register_response_round_trips_through_canonical_identity_model(client: 
     AgentIdentityV1.model_validate(body)
 
 
-@pytest.mark.xfail(
-    strict=False,
-    reason=(
-        "D2: POST /api/v1/witness-events does not enforce witness_plan.forbidden_witnesses "
-        "(no caller of sab_identity.validate_witness_independence in agora/); "
-        "claimant self-affirm is accepted by the live API"
-    ),
-)
 def test_claimant_self_witness_is_rejected_when_seed_forbids_it(client: TestClient) -> None:
     claimant = _Agent()
     _register(client, claimant, "dogfood-regression-self-witness")

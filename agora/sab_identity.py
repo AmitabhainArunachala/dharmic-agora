@@ -484,8 +484,74 @@ def same_operator(first: AgentIdentityV1, second: AgentIdentityV1) -> bool:
     first_operator = identity_operator_id(first)
     second_operator = identity_operator_id(second)
     if "unknown" in {first_operator, second_operator}:
-        return False
+        # R2 conservative collapse (SAB_STANDING_SEMANTICS_V0 §1.3): undisclosed
+        # operators are treated as same-operator; independence fails closed.
+        return True
     return first_operator == second_operator
+
+
+INDEPENDENCE_GRADE_TIERS = {
+    "self": 0,
+    "same_operator": 1,
+    "undisclosed": 1,
+    "same_operator_distinct_keys": 2,
+    "cross_operator_unverified": 3,
+    "cross_operator_attested": 4,
+}
+
+STANDING_TIER_REQUIREMENTS = {
+    "provisional": {"min_witnesses": 1, "min_grade": "self", "min_distinct_operators": 1},
+    "active": {"min_witnesses": 2, "min_grade": "cross_operator_unverified", "min_distinct_operators": 2},
+    "canon": {"min_witnesses": 3, "min_grade": "cross_operator_attested", "min_distinct_operators": 3},
+}
+
+MIN_INDEPENDENT_OPERATORS_FOR_STANDING = 3
+
+
+def independence_grade(witness: AgentIdentityV1, claimant: AgentIdentityV1) -> str:
+    if witness.subject_id == claimant.subject_id or witness.public_key == claimant.public_key:
+        return "self"
+    witness_operator = identity_operator_id(witness)
+    claimant_operator = identity_operator_id(claimant)
+    if "unknown" in {witness_operator, claimant_operator}:
+        return "undisclosed"
+    if witness_operator == claimant_operator:
+        return "same_operator_distinct_keys"
+    # cross_operator_attested requires verified external anchors (backlog);
+    # self-declared distinct operators cap at cross_operator_unverified.
+    return "cross_operator_unverified"
+
+
+def quorum_tier(
+    *,
+    witnesses: list[tuple[str, str]],
+    system_operator_count: int,
+) -> str:
+    """Highest standing tier this witness set supports (grade, operator_id) pairs.
+
+    Fails closed: ungradable input or too few disclosed operators collapses
+    to `provisional` (the Independence Law cap, SAB_MASTER_VISION_V1 §6).
+    """
+    for tier in ("canon", "active"):
+        if system_operator_count < MIN_INDEPENDENT_OPERATORS_FOR_STANDING:
+            break
+        requirement = STANDING_TIER_REQUIREMENTS[tier]
+        min_tier = INDEPENDENCE_GRADE_TIERS[str(requirement["min_grade"])]
+        counted = [
+            (grade, operator_id)
+            for grade, operator_id in witnesses
+            if INDEPENDENCE_GRADE_TIERS.get(grade, INDEPENDENCE_GRADE_TIERS["undisclosed"]) >= min_tier
+        ]
+        distinct_operators = {
+            operator_id
+            for _, operator_id in counted
+            if operator_id and operator_id.strip().lower() != "unknown"
+        }
+        if len(counted) >= int(requirement["min_witnesses"]) and len(distinct_operators) >= int(
+            requirement["min_distinct_operators"]
+        ):
+            return tier
+    return "provisional"
 
 
 def validate_witness_independence(
