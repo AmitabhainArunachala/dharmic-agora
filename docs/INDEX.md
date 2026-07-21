@@ -221,3 +221,4 @@ These are high-ROI cleanups that reduce drift without a rewrite:
 
 1. Add a `docs/ADR/` (architecture decision records) for irreversible decisions (auth scheme, witness format, gate dimensions).
 2. Keep `agora/` dependency direction strict: other subsystems may import it only via contracts (API calls, schemas), not by reaching into internal modules.
+- `docs/lanes/invariance-under-influence-v0/` — NEW theme lane (2026-07-21): can intelligence detect, disclose, and transcend its own steering? Cross-bloc LLM steering detection, live-fire invariant extraction. Raw transcripts in 00_raw/ (append-only), progressions dated, canonical versioned.
